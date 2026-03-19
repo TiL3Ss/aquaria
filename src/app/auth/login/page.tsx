@@ -1,81 +1,105 @@
 //src/app/auth/login/page.tsx
-'use server'
 
-import { revalidatePath } from 'next/cache'
-import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
-import { cleanRut, validateRut } from '@/lib/rut'
+import { login } from '../actions'
+import RutInput from '@/components/ui/RutInput'
+import Link from 'next/link'
 
-export async function login(formData: FormData) {
-  const supabase = await createClient()
-
-  const rut      = formData.get('rut')      as string
-  const password = formData.get('password') as string
-
-  const cleanedRut = cleanRut(rut)
-  if (!validateRut(cleanedRut)) {
-    redirect('/auth/login?error=RUT+inválido')
-  }
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('email')
-    .eq('rut', cleanedRut)
-    .single()
-
-  if (!profile) {
-    redirect('/auth/login?error=RUT+no+registrado+en+el+sistema')
-  }
-
-  const { error } = await supabase.auth.signInWithPassword({
-    email: profile.email,
-    password,
-  })
-
-  if (error) {
-    redirect('/auth/login?error=Contraseña+incorrecta')
-  }
-
-  revalidatePath('/', 'layout')
-  redirect('/dashboard')
+interface Props {
+  searchParams: Promise<{ error?: string; success?: string }>
 }
 
-export async function register(formData: FormData) {
-  const supabase = await createClient()
+export default async function LoginPage({ searchParams }: Props) {
+  const params = await searchParams
 
-  const fullName   = (formData.get('full_name') as string)?.trim()
-  const rut        = formData.get('rut')        as string
-  const email      = (formData.get('email')     as string)?.trim()
-  const password   = formData.get('password')   as string
-  const cleanedRut = cleanRut(rut)
+  return (
+    <div className="min-h-dvh bg-[#F2F2F7] flex flex-col select-none">
+      <div className="flex-1 flex flex-col justify-end px-5 pb-10 pt-20">
 
-  if (!validateRut(cleanedRut)) redirect('/auth/register?error=RUT+inválido')
-  if (!fullName)                 redirect('/auth/register?error=El+nombre+es+obligatorio')
-  if (!email || !email.includes('@')) redirect('/auth/register?error=Correo+inválido')
-  if (password.length < 8)      redirect('/auth/register?error=Contraseña+mínimo+8+caracteres')
+        {/* Brand */}
+        <div className="mb-8">
+          <div className="w-16 h-16 bg-blue-500 rounded-[20px] flex items-center justify-center mb-5 shadow-lg shadow-blue-200">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="white">
+              <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+            </svg>
+          </div>
+          <h1 className="text-[34px] font-bold text-gray-900 tracking-tight leading-none">
+            Aquaria
+          </h1>
+          <p className="text-[15px] text-gray-500 mt-2">
+            Sistema de bitácoras operativas
+          </p>
+        </div>
 
-  const { data: existing } = await supabase
-    .from('profiles')
-    .select('id')
-    .eq('rut', cleanedRut)
-    .maybeSingle()
+        {/* Error alert */}
+        {params.error && (
+          <div className="bg-red-50 border border-red-100 rounded-2xl px-4 py-3 mb-4 flex items-center gap-2.5">
+            <span className="w-5 h-5 rounded-full bg-red-100 text-red-500 flex items-center justify-center text-[11px] font-bold flex-shrink-0">
+              !
+            </span>
+            <p className="text-[13px] text-red-600">
+              {decodeURIComponent(params.error)}
+            </p>
+          </div>
+        )}
 
-  if (existing) redirect('/auth/register?error=Este+RUT+ya+está+registrado')
+        {/* Success alert (viene de /register) */}
+        {params.success && (
+          <div className="bg-green-50 border border-green-100 rounded-2xl px-4 py-3 mb-4 flex items-center gap-2.5">
+            <span className="w-5 h-5 rounded-full bg-green-100 text-green-600 flex items-center justify-center text-[11px] font-bold flex-shrink-0">
+              ✓
+            </span>
+            <p className="text-[13px] text-green-700">
+              {decodeURIComponent(params.success)}
+            </p>
+          </div>
+        )}
 
-  const { error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: { data: { full_name: fullName, rut: cleanedRut } },
-  })
+        {/* Form card */}
+        <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
+          <form action={login} className="p-5 space-y-4">
 
-  if (error) redirect(`/auth/register?error=${encodeURIComponent(error.message)}`)
+            <div className="space-y-1.5">
+              <label className="text-[12px] font-semibold text-gray-400 uppercase tracking-wider px-1">
+                RUT
+              </label>
+              <RutInput name="rut" required />
+            </div>
 
-  redirect('/auth/login?success=Cuenta+creada.+Revisa+tu+correo+para+confirmar.')
-}
+            <div className="space-y-1.5">
+              <label className="text-[12px] font-semibold text-gray-400 uppercase tracking-wider px-1">
+                Contraseña
+              </label>
+              <input
+                type="password"
+                name="password"
+                placeholder="••••••••"
+                required
+                autoComplete="current-password"
+                className="w-full px-4 py-3.5 bg-gray-50 rounded-2xl text-[15px] text-gray-900
+                  placeholder-gray-400 border border-gray-100 outline-none transition-all
+                  focus:bg-white focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+              />
+            </div>
 
-export async function logout() {
-  const supabase = await createClient()
-  await supabase.auth.signOut()
-  revalidatePath('/', 'layout')
-  redirect('/auth/login')
+            <button
+              type="submit"
+              className="w-full bg-blue-500 active:bg-blue-600 text-white font-semibold
+                text-[16px] py-4 rounded-2xl transition-colors mt-1 shadow-md shadow-blue-200"
+            >
+              Ingresar
+            </button>
+
+          </form>
+        </div>
+
+        <p className="text-center text-[14px] text-gray-500 mt-5">
+          ¿No tienes cuenta?{' '}
+          <Link href="/auth/register" className="text-blue-500 font-semibold">
+            Regístrate
+          </Link>
+        </p>
+
+      </div>
+    </div>
+  )
 }
