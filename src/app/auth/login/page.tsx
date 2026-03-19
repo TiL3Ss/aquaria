@@ -8,6 +8,7 @@ interface Props {
   searchParams: Promise<{ error?: string; success?: string }>
 }
 
+
 export default async function LoginPage({ searchParams }: Props) {
   const params = await searchParams
 

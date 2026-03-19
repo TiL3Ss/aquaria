@@ -41,7 +41,7 @@ export async function login(formData: FormData) {
   redirect('/dashboard')
 }
 
-export async function register(_: unknown, formData: FormData) {
+export async function register(formData: FormData) {
   const supabase = await createClient()
 
   const fullName = (formData.get('full_name') as string)?.trim()
