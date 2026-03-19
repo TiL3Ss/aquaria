@@ -7,7 +7,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { cleanRut, validateRut } from '@/lib/rut'
 
-export async function login(_: unknown, formData: FormData) {
+export async function login( formData: FormData) {
   const supabase = await createClient()
 
   const rut = formData.get('rut') as string
