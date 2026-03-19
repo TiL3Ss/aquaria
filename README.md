@@ -1,38 +1,93 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Aquaria — Setup Guide
 
-## Getting Started
+## Estructura de archivos
 
-First, run the development server:
+```
+src/
+├── app/
+│   ├── auth/
+│   │   ├── actions.ts          ← Server Actions: login, register, logout
+│   │   ├── layout.tsx
+│   │   ├── login/page.tsx      ← Pantalla login
+│   │   └── register/page.tsx   ← Pantalla registro
+│   ├── dashboard/
+│   │   ├── actions.ts          ← Server Actions: CRUD bitácoras
+│   │   ├── DashboardClient.tsx ← UI del dashboard (client component)
+│   │   └── page.tsx            ← Server page (lee sesión + perfil)
+│   ├── bitacora/
+│   │   ├── BitacoraClient.tsx  ← UI de la bitácora (client component)
+│   │   └── page.tsx            ← Server page
+│   ├── globals.css
+│   ├── layout.tsx
+│   └── page.tsx                ← Redirect raíz
+├── components/
+│   └── ui/
+│       └── RutInput.tsx        ← Input RUT con validación en tiempo real
+├── lib/
+│   ├── rut.ts                  ← Validador/formateador RUT chileno
+│   └── supabase/
+│       ├── client.ts           ← Browser client
+│       └── server.ts           ← Server client (cookies)
+├── middleware.ts                ← Protección de rutas
+└── types/index.ts              ← Tipos TypeScript + constantes
+```
+
+## Pasos para correr el proyecto
+
+### 1. Variables de entorno
+
+Crea `.env.local` en la raíz:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://xxxxxxxxxxxx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGci...
+```
+
+### 2. Instalar dependencias
+
+```bash
+npm install
+```
+
+### 3. Ejecutar la base de datos
+
+En Supabase → SQL Editor, ejecuta el schema SQL entregado anteriormente
+(tablas: profiles, modules, logs, log_parameters, checklist_responses, fisicoquimicos).
+
+### 4. Configurar Auth en Supabase
+
+- Authentication → URL Configuration
+  - Site URL: `http://localhost:3000`
+  - Redirect URLs: `http://localhost:3000/**`
+
+### 5. Correr en desarrollo
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 6. Deploy en Vercel
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+vercel env add NEXT_PUBLIC_SUPABASE_URL
+vercel env add NEXT_PUBLIC_SUPABASE_ANON_KEY
+vercel --prod
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Flujo de navegación
 
-## Learn More
+```
+/ → (redirect según sesión)
+  ├── /auth/login      ← sin sesión
+  ├── /auth/register
+  └── /dashboard       ← con sesión
+        └── /bitacora?module=hat&date=2025-03-19&shift=dia&mode=create
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Notas importantes
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
-
-
+- El middleware en `src/middleware.ts` protege todas las rutas automáticamente
+- `searchParams` y `cookies()` son async en Next 16 — ya está manejado
+- Los Server Actions usan `redirect()` para pasar errores vía URL params
+- El componente `RutInput` valida el dígito verificador en tiempo real (client-side)
+- La tabla `profiles` se llena automáticamente via trigger de Supabase al registrarse

@@ -1,0 +1,1 @@
+// src/app/bitacora/page.tsx

@@ -1,26 +1,176 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* ─── Design tokens ──────────────────────────────────── */
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+  /* App surface colors */
+  --color-app-bg:      #F2F2F7;
+  --color-app-surface: #FFFFFF;
+  --color-app-grouped: #F2F2F7;
+
+  /* Custom border radius matching iOS */
+  --radius-card: 16px;
+  --radius-input: 12px;
+  --radius-btn:  12px;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* ─── Base resets ────────────────────────────────────── */
+*, *::before, *::after {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  /* Prevent iOS font-size inflate on orientation change */
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: #F2F2F7;
+  overscroll-behavior-y: none;
+}
+
+/* ─── Scrollbar hide ─────────────────────────────────── */
+.scrollbar-none::-webkit-scrollbar { display: none; }
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+/* ─── Number inputs — no spinners ────────────────────── */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] { -moz-appearance: textfield; }
+
+/* ─── Safe-area helpers ──────────────────────────────── */
+.pt-safe  { padding-top:    env(safe-area-inset-top,    0px); }
+.pb-safe  { padding-bottom: env(safe-area-inset-bottom, 0px); }
+.pl-safe  { padding-left:   env(safe-area-inset-left,   0px); }
+.pr-safe  { padding-right:  env(safe-area-inset-right,  0px); }
+
+/* ─── Animations ─────────────────────────────────────── */
+@keyframes slide-up {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0);    }
+}
+@keyframes drawer-in {
+  from { transform: translateX(-100%); opacity: 0; }
+  to   { transform: translateX(0);     opacity: 1; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1);    }
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.animate-slide-up  { animation: slide-up  0.28s cubic-bezier(0.32, 0.72, 0, 1) both; }
+.animate-drawer-in { animation: drawer-in 0.26s cubic-bezier(0.32, 0.72, 0, 1) both; }
+.animate-fade-in   { animation: fade-in   0.22s ease-out both; }
+.animate-scale-in  { animation: scale-in  0.18s ease-out both; }
+.animate-spin      { animation: spin      0.7s  linear infinite; }
+
+/* Stagger helpers for lists */
+.stagger-1 { animation-delay: 0.04s; }
+.stagger-2 { animation-delay: 0.08s; }
+.stagger-3 { animation-delay: 0.12s; }
+
+/* ─── Focus ring (iOS-style blue) ────────────────────── */
+.focus-ring {
+  outline: none;
+  transition: box-shadow 0.15s ease;
+}
+.focus-ring:focus-visible {
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.35);
+}
+
+/* ─── iOS-style grouped list ─────────────────────────── */
+.ios-list {
+  background: white;
+  border-radius: 16px;
+  overflow: hidden;
+}
+.ios-list-row {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid #F2F2F7;
+  gap: 12px;
+}
+.ios-list-row:last-child { border-bottom: none; }
+
+/* ─── Card shadow (iOS elevation) ────────────────────── */
+.card-shadow {
+  box-shadow:
+    0 1px 3px rgba(0,0,0,0.06),
+    0 1px 2px rgba(0,0,0,0.04);
+}
+.card-shadow-md {
+  box-shadow:
+    0 4px 12px rgba(0,0,0,0.08),
+    0 2px 4px  rgba(0,0,0,0.04);
+}
+
+/* ─── Shift color utilities ──────────────────────────── */
+.shift-noche { --shift-bg: #EEF2FF; --shift-text: #4338CA; --shift-dot: #818CF8; }
+.shift-dia   { --shift-bg: #FFFBEB; --shift-text: #B45309; --shift-dot: #F59E0B; }
+.shift-tarde { --shift-bg: #FFF7ED; --shift-text: #C2410C; --shift-dot: #FB923C; }
+
+/* ─── Checked state for checklist items ─────────────── */
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  border-radius: 12px;
+  border: 1.5px solid transparent;
+  background: #F9FAFB;
+  transition: background 0.15s, border-color 0.15s;
+  cursor: pointer;
+  user-select: none;
+}
+.check-row.is-checked {
+  background: #F0FDF4;
+  border-color: #BBF7D0;
+}
+.check-row.is-disabled { cursor: default; }
+
+/* ─── Numeric input table cells ─────────────────────── */
+.fq-input {
+  width: 58px;
+  text-align: center;
+  padding: 5px 4px;
+  border-radius: 8px;
+  font-size: 12px;
+  border: 1.5px solid transparent;
+  background: transparent;
+  outline: none;
+  transition: background 0.15s, border-color 0.15s;
+  -moz-appearance: textfield;
+}
+.fq-input.editing {
+  background: #F9FAFB;
+  border-color: #E5E7EB;
+}
+.fq-input.editing:focus {
+  background: white;
+  border-color: #93C5FD;
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.12);
+}
+
+/* ─── Topbar blur backdrop (for sticky headers) ──────── */
+.topbar-blur {
+  backdrop-filter: blur(12px) saturate(1.8);
+  -webkit-backdrop-filter: blur(12px) saturate(1.8);
+  background: rgba(255,255,255,0.88);
 }
