@@ -4,32 +4,30 @@
 
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@/utils/supabase/server'
 import { cleanRut, validateRut } from '@/lib/rut'
+
 
 export async function login(formData: FormData) {
   const supabase = await createClient()
 
   const rut = formData.get('rut') as string
   const password = formData.get('password') as string
-
   const cleanedRut = cleanRut(rut)
+
   if (!validateRut(cleanedRut)) {
     redirect('/auth/login?error=RUT+inválido')
   }
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('email')
-    .eq('rut', cleanedRut)
-    .single()
+  const { data: email } = await supabase
+    .rpc('get_email_by_rut', { p_rut: cleanedRut })
 
-  if (!profile) {
+  if (!email) {
     redirect('/auth/login?error=RUT+no+registrado+en+el+sistema')
   }
 
   const { error } = await supabase.auth.signInWithPassword({
-    email: profile.email,
+    email,
     password,
   })
 

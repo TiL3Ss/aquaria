@@ -4,6 +4,7 @@
 
 import { useState } from 'react'
 import { formatRut, validateRut, cleanRut } from '@/lib/rut'
+import {X as Xicon} from 'lucide-react'
 
 interface RutInputProps {
   name:          string
@@ -30,26 +31,21 @@ export default function RutInput({ name, required, defaultValue = '' }: RutInput
   }
 
   return (
-    <div className="relative">
-      {/* Input visible con formato */}
-      <input
-        type="text"
-        name={name}
-        value={value}
-        onChange={handleChange}
-        placeholder="12.345.678-9"
-        required={required}
-        inputMode="numeric"
-        autoComplete="username"
-        className={`w-full px-4 py-3.5 bg-gray-50 rounded-2xl text-[15px] text-gray-900
-          placeholder-gray-400 border outline-none transition-all pr-16
-          ${status === 'valid'
-            ? 'bg-white border-green-400 ring-2 ring-green-100'
-            : status === 'invalid'
-            ? 'bg-white border-red-400 ring-2 ring-red-100'
-            : 'border-gray-100 focus:bg-white focus:border-blue-300 focus:ring-2 focus:ring-blue-100'
-          }`}
-      />
+        <div className="relative">
+          {/* Input visible con formato */}
+          <input
+      type="text"
+      name={name}
+      value={value}
+      onChange={handleChange}
+      placeholder="12.345.678-9"
+      required={required}
+      inputMode="numeric"
+      autoComplete="username"
+      className={`w-full bg-transparent outline-none text-[15px] py-3 pr-16
+        placeholder:text-gray-400
+      `}
+    />
 
       {/* Valor limpio para el Server Action (sin puntos ni guión) */}
       <input
@@ -66,7 +62,7 @@ export default function RutInput({ name, required, defaultValue = '' }: RutInput
             ? 'bg-green-100 text-green-700'
             : 'bg-red-100 text-red-600'}`}
         >
-          {status === 'valid' ? '✓ OK' : '✗'}
+          {status === 'valid' ? '✓ OK' : <Xicon size={12} />}
         </span>
       )}
     </div>

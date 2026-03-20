@@ -2,31 +2,32 @@
 
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import type { LogFull, Shift } from '@/types'
-import { SHIFT_LABELS, SHIFT_TIMES, CHECKLIST_ITEMS, FQ_IDENTIFIERS } from '@/types'
-import { updateLog, deleteLog, createLog } from '@/app/dashboard/actions'
+import { SHIFT_LABELS, SHIFT_TIMES, SHIFT_SLOTS, FQ_IDENTIFIERS_HAT, FQ_IDENTIFIERS_FF } from '@/types'
+import {
+  updateLog, deleteLog, createLog,
+  addChecklistConfigItem, updateChecklistConfigItem,
+  toggleChecklistConfigItem, deleteChecklistConfigItem,
+} from '@/app/dashboard/actions'
+import type { ChecklistConfigItem } from '@/app/dashboard/actions'
 
 /* ── Types ─────────────────────────────────────────── */
 interface Props {
-  logFull:      LogFull | null
-  module:       string
-  date:         string
-  shift:        Shift
-  mode:         'view' | 'create'
-  operatorName: string
+  logFull:         LogFull | null
+  module:          string
+  date:            string
+  shift:           Shift
+  mode:            'view' | 'create'
+  operatorName:    string
+  checklistConfig: ChecklistConfigItem[]
 }
 
-type FQCell = {
-  o2_saturation?: number
-  dissolved_o2?:  number
-  temperature?:   number
-  ph?:            number
-  orp?:           number
-  salinity?:      number
-}
-type FQState = Record<string, Record<string, FQCell>>
+type FQCell    = { o2_saturation?: number; dissolved_o2?: number; temperature?: number }
+type FQState   = Record<string, Record<string, FQCell>>
+type PozoCell  = { temperature?: number; o2_saturation?: number; dissolved_o2?: number }
+type PozoState = Record<string, PozoCell>
 
 /* ── Constants ─────────────────────────────────────── */
 const SHIFT_BADGE: Record<Shift, string> = {
@@ -35,44 +36,107 @@ const SHIFT_BADGE: Record<Shift, string> = {
   tarde: 'bg-orange-100 text-orange-700',
 }
 
-const ALL_CHECKLIST = [
-  ...CHECKLIST_ITEMS.generales,
-  ...CHECKLIST_ITEMS.mantenimiento,
-  ...CHECKLIST_ITEMS.equipos,
-]
+const OSMOSIS_OPTIONS = ['1/4', '2/4', '3/4', '4/4', 'Muy bajo', 'Bajo', 'Medio', 'Lleno']
+
+const isHAT = (m: string) => m.toLowerCase() === 'hat'
+const isFF  = (m: string) => m.toLowerCase() === 'ff'
+
+function parseAdditionalOperators(arr: string[]): string | null {
+  const filtered = arr.filter(s => s.trim() !== '')
+  return filtered.length > 0 ? filtered.join(', ') : null
+}
 
 /* ── Component ─────────────────────────────────────── */
 export default function BitacoraClient({
-  logFull, module, date, shift, mode, operatorName,
+  logFull, module, date, shift, mode, operatorName, checklistConfig: initialConfig,
 }: Props) {
   const router  = useRouter()
   const formRef = useRef<HTMLFormElement>(null)
 
-  const [isEditing,   setIsEditing]   = useState(mode === 'create')
-  const [showDelete,  setShowDelete]  = useState(false)
-  const [deleteInput, setDeleteInput] = useState('')
-  const [saving,      setSaving]      = useState(false)
-  const [deleting,    setDeleting]    = useState(false)
-  const [saveOk,      setSaveOk]      = useState(false)
+  /* ── UI state ─── */
+  const [isEditing,  setIsEditing]  = useState(mode === 'create')
+  const [showDelete, setShowDelete] = useState(false)
+  const [deleteInput,setDeleteInput]= useState('')
+  const [saving,     setSaving]     = useState(false)
+  const [deleting,   setDeleting]   = useState(false)
+  const [saveOk,     setSaveOk]     = useState(false)
+  const [clock,      setClock]      = useState('')
+  const [activeSlot, setActiveSlot] = useState<'A' | 'B'>('A')
 
-  /* Checklist */
+  /* ── Navigation helpers ─── */
+  // ← Turno: vuelve al dashboard con el día y módulo seleccionados (restaura las shift cards)
+  function goBack() {
+    router.push(`/dashboard?module=${module}&date=${date}`)
+  }
+  // 🏠 Home: vuelve al calendario sin estado previo
+  function goHome() {
+    router.push('/dashboard')
+  }
+
+  /* ── Clock ─── */
+  useEffect(() => {
+    const tick = () => setClock(new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', second: '2-digit' }))
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [])
+
+  /* ── Slots ─── */
+  const [slotA, slotB] = SHIFT_SLOTS[shift]
+  const currentSlot    = activeSlot === 'A' ? slotA : slotB
+  const fqIds          = isHAT(module) ? FQ_IDENTIFIERS_HAT : isFF(module) ? FQ_IDENTIFIERS_FF : []
+
+  /* ── Checklist config state ─── */
+  const [config,       setConfig]       = useState<ChecklistConfigItem[]>(initialConfig ?? [])
+  const [newTaskLabel, setNewTaskLabel] = useState('')
+  const [editingItem,  setEditingItem]  = useState<{ id: string; label: string } | null>(null)
+  const [taskPending,  setTaskPending]  = useState(false)
+
+  const activeItems = config.filter(i => i.active)
+  const ALL_KEYS    = activeItems.map(i => i.item_key)
+
   const [checked, setChecked] = useState<Set<string>>(
     new Set(logFull?.checklist.filter(c => c.checked).map(c => c.item_key) ?? [])
   )
 
-  /* Fisicoquímicos */
+  
+  
+
+  
+
+  /* ── FQ state ─── */
   const [fqData, setFqData] = useState<FQState>(() => {
     const map: FQState = {}
-    FQ_IDENTIFIERS.forEach(id => {
+    fqIds.forEach(id => {
       map[id] = {}
-      ;(['00:00','04:00'] as const).forEach(ts => {
+      ;[slotA, slotB].forEach(ts => {
         const f = logFull?.fisicoquimicos.find(r => r.identifier === id && r.time_slot === ts)
         map[id][ts] = f
-          ? { o2_saturation: f.o2_saturation ?? undefined, dissolved_o2: f.dissolved_o2 ?? undefined,
-              temperature: f.temperature ?? undefined, ph: f.ph ?? undefined,
-              orp: f.orp ?? undefined, salinity: f.salinity ?? undefined }
+          ? { o2_saturation: f.o2_saturation ?? undefined, dissolved_o2: f.dissolved_o2 ?? undefined, temperature: f.temperature ?? undefined }
           : {}
       })
+    })
+    return map
+  })
+
+  const [tempSlotA, setTempSlotA] = useState<string>(() => {
+    const f = logFull?.fisicoquimicos.find(r => r.time_slot === slotA)
+    return f?.temperature != null ? String(f.temperature) : ''
+  })
+  const [tempSlotB, setTempSlotB] = useState<string>(() => {
+    const f = logFull?.fisicoquimicos.find(r => r.time_slot === slotB)
+    return f?.temperature != null ? String(f.temperature) : ''
+  })
+
+  /* ── Pozo state (HAT only) ─── */
+  const [pozoData, setPozoData] = useState<PozoState>(() => {
+    const map: PozoState = { [slotA]: {}, [slotB]: {} }
+    logFull?.pozo?.forEach(r => {
+      map[r.time_slot] = {
+        temperature:   r.temperature   ?? undefined,
+        o2_saturation: r.o2_saturation ?? undefined,
+        dissolved_o2:  r.dissolved_o2  ?? undefined,
+      }
     })
     return map
   })
@@ -80,158 +144,229 @@ export default function BitacoraClient({
   const params = logFull?.parameters
   const log    = logFull?.log
 
-  const dateLabel = new Date(date + 'T12:00:00').toLocaleDateString('es-CL', {
-    weekday:'long', day:'numeric', month:'long', year:'numeric',
+  /* ── Responsables adicionales ─── */
+const [extraResponsables, setExtraResponsables] = useState<string[]>(() => {
+  const raw = log?.additional_operators
+    if (!raw) return []
+    return raw.split(', ').filter(s => s.trim() !== '')
   })
 
-  /* ── Helpers ────────────────────────────────────── */
+  const dateLabel = new Date(date + 'T12:00:00').toLocaleDateString('es-CL', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  })
+
+  /* ── Helpers ─── */
   function toggleCheck(key: string) {
     if (!isEditing) return
-    setChecked(prev => {
-      const n = new Set(prev)
-      n.has(key) ? n.delete(key) : n.add(key)
-      return n
-    })
+    setChecked(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n })
   }
 
   function setFQ(id: string, ts: string, field: keyof FQCell, raw: string) {
     const v = raw === '' ? undefined : parseFloat(raw)
-    setFqData(prev => ({
-      ...prev,
-      [id]: { ...prev[id], [ts]: { ...prev[id]?.[ts], [field]: v } },
-    }))
+    setFqData(prev => ({ ...prev, [id]: { ...prev[id], [ts]: { ...prev[id]?.[ts], [field]: v } } }))
   }
 
-  /* ── Save ───────────────────────────────────────── */
+  function setPozo(ts: string, field: keyof PozoCell, raw: string) {
+    const v = raw === '' ? undefined : parseFloat(raw)
+    setPozoData(prev => ({ ...prev, [ts]: { ...prev[ts], [field]: v } }))
+  }
+
+  /* ── Checklist CRUD ─── */
+  async function handleAddTask() {
+    if (!newTaskLabel.trim()) return
+    setTaskPending(true)
+    const res = await addChecklistConfigItem(module, newTaskLabel.trim())
+    if (res.data) { setConfig(prev => [...prev, res.data!]); setNewTaskLabel('') }
+    setTaskPending(false)
+  }
+
+  async function handleUpdateTask() {
+    if (!editingItem) return
+    setTaskPending(true)
+    await updateChecklistConfigItem(editingItem.id, editingItem.label)
+    setConfig(prev => prev.map(i => i.id === editingItem.id ? { ...i, label: editingItem.label } : i))
+    setEditingItem(null)
+    setTaskPending(false)
+  }
+
+  async function handleToggleItem(id: string, active: boolean) {
+    setTaskPending(true)
+    await toggleChecklistConfigItem(id, active)
+    setConfig(prev => prev.map(i => i.id === id ? { ...i, active } : i))
+    setTaskPending(false)
+  }
+
+  async function handleDeleteItem(id: string) {
+    setTaskPending(true)
+    await deleteChecklistConfigItem(id)
+    setConfig(prev => prev.filter(i => i.id !== id))
+    setTaskPending(false)
+  }
+
+ 
+
+  /* ── Save ─── */
   async function handleSave() {
-    if (!formRef.current) return
-    setSaving(true)
-    const fd = new FormData(formRef.current)
-
-    // Checklist
-    ALL_CHECKLIST.forEach(item => {
-      fd.append('checklist_keys', item.key)
-      fd.set(`check_${item.key}`, checked.has(item.key) ? 'true' : 'false')
+  if (!formRef.current) return
+  setSaving(true)
+  
+  // Construir fqEntries y pozoEntries ANTES del if/else
+  const fqEntries: Record<string, unknown>[] = []
+  console.log('fqEntries antes de updateLog:', fqEntries)
+  const tempA = tempSlotA !== '' ? parseFloat(tempSlotA) : undefined
+  const tempB = tempSlotB !== '' ? parseFloat(tempSlotB) : undefined
+  fqIds.forEach(id => {
+    ;[slotA, slotB].forEach(ts => {
+      const cell = { ...fqData[id]?.[ts] ?? {} }
+      if (ts === slotA && tempA !== undefined) cell.temperature = tempA
+      if (ts === slotB && tempB !== undefined) cell.temperature = tempB
+      if (Object.values(cell).some(v => v !== undefined))
+        fqEntries.push({ identifier: id, time_slot: ts, ...cell })
     })
+  })
 
-    // Fisicoquímicos
-    const fqEntries: Record<string, unknown>[] = []
-    FQ_IDENTIFIERS.forEach(id => {
-      ;(['00:00','04:00'] as const).forEach(ts => {
-        const cell = fqData[id]?.[ts] ?? {}
-        if (Object.values(cell).some(v => v !== undefined))
-          fqEntries.push({ identifier: id, time_slot: ts, ...cell })
-      })
+  const pozoEntries: Record<string, unknown>[] = []
+  if (isHAT(module)) {
+    ;[slotA, slotB].forEach(ts => {
+      const cell = pozoData[ts] ?? {}
+      if (Object.values(cell).some(v => v !== undefined))
+        pozoEntries.push({ time_slot: ts, ...cell })
     })
-    fd.set('fisicoquimicos', JSON.stringify(fqEntries))
-
-    if (mode === 'create') {
-      fd.set('module_slug', module)
-      fd.set('log_date',    date)
-      fd.set('shift',       shift)
-      await createLog(fd)
-    } else if (log) {
-      await updateLog(log.id, fd)
-      setIsEditing(false)
-      setSaveOk(true)
-      setTimeout(() => setSaveOk(false), 2500)
-    }
-    setSaving(false)
   }
 
-  /* ── Delete ─────────────────────────────────────── */
+  if (mode === 'create') {
+  const form = formRef.current
+  const numInputs = form.querySelectorAll('input[type="number"], select')
+  const payload: Record<string, unknown> = {
+    module_slug:          module,
+    log_date:             date,
+    shift:                shift,
+    operator_name:        (form.querySelector('[name="operator_name"]') as HTMLInputElement)?.value,
+    notes:                (form.querySelector('[name="notes"]') as HTMLTextAreaElement)?.value,
+    additional_operators: parseAdditionalOperators(extraResponsables),
+    checklist_keys:       ALL_KEYS,
+    fisicoquimicos:       fqEntries,
+    pozo:                 pozoEntries,
+  }
+  ALL_KEYS.forEach(key => { payload[`check_${key}`] = checked.has(key) })
+  numInputs.forEach(el => {
+    const input = el as HTMLInputElement | HTMLSelectElement
+    if (input.name) {
+      payload[input.name] = input.type === 'number'
+        ? (input.value !== '' ? parseFloat(input.value) : null)
+        : (input.value || null)
+    }
+  })
+  await createLog(payload)
+} else if (log) {
+    const form = formRef.current
+    const numInputs = form.querySelectorAll('input[type="number"], select')
+    const payload: Record<string, unknown> = {
+      operator_name:        (form.querySelector('[name="operator_name"]') as HTMLInputElement)?.value,
+      notes:                (form.querySelector('[name="notes"]') as HTMLTextAreaElement)?.value,
+      additional_operators: parseAdditionalOperators(extraResponsables),
+      checklist_keys:       ALL_KEYS,
+      fisicoquimicos:       fqEntries,
+      pozo:                 pozoEntries,
+    }
+    ALL_KEYS.forEach(key => { payload[`check_${key}`] = checked.has(key) })
+    numInputs.forEach(el => {
+      const input = el as HTMLInputElement | HTMLSelectElement
+      if (input.name) {
+        payload[input.name] = input.type === 'number'
+          ? (input.value !== '' ? parseFloat(input.value) : null)
+          : (input.value || null)
+      }
+    })
+    await updateLog(log.id, payload)
+    setIsEditing(false)
+    setSaveOk(true)
+    setTimeout(() => setSaveOk(false), 2500)
+  }
+
+  setSaving(false)
+}
+
+  /* ── Delete ─── */
   async function handleDelete() {
     if (!log) return
     setDeleting(true)
     await deleteLog(log.id)
   }
 
-  /* ── Input class helpers ────────────────────────── */
-  const fieldInput = (editing: boolean) =>
+  /* ── Input helpers ─── */
+  const fieldCls = (editing: boolean) =>
     `w-full px-3.5 py-3 rounded-xl text-[14px] border outline-none transition-all
      ${editing
        ? 'bg-white border-gray-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-50 text-gray-900'
        : 'bg-gray-50 border-transparent text-gray-700 cursor-default'}`
 
-  const numField = (
-    name: string,
-    val?: number | null,
-    unit?: string,
-  ) => (
+  const numField = (name: string, val?: number | null, unit?: string) => (
     <div className="relative">
-      <input
-        type="number"
-        name={name}
-        step="0.01"
-        defaultValue={val ?? ''}
-        readOnly={!isEditing}
+      <input type="number" name={name} step="0.01" defaultValue={val ?? ''} readOnly={!isEditing}
         placeholder={isEditing ? '0.00' : '—'}
-        className={`${fieldInput(isEditing)} ${unit ? 'pr-10' : ''}`}
+        className={`${fieldCls(isEditing)} ${unit ? 'pr-10' : ''}`}
       />
-      {unit && (
-        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-gray-400 font-medium pointer-events-none">
-          {unit}
-        </span>
-      )}
+      {unit && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-gray-400 font-medium pointer-events-none">{unit}</span>}
     </div>
   )
 
-  /* ── UI ─────────────────────────────────────────── */
+  /* ── UI ─── */
   return (
     <div className="min-h-dvh bg-[#F2F2F7] flex flex-col">
 
-      {/* ══ TOP NAV ════════════════════════════════════ */}
-      <header className="topbar-blur border-b border-black/[0.06] px-4 h-14 flex items-center justify-between sticky top-0 z-30 pt-safe">
+      {/* ══ TOP NAV ══ */}
+      <header className="topbar-blur border-b border-black/[0.06] px-4 h-16 flex items-center justify-between sticky top-0 z-30 pt-safe">
 
-        {/* Back */}
-        <button
-          onClick={() => router.push('/dashboard')}
-          className="flex items-center gap-1 text-blue-500 text-[15px] font-medium active:opacity-60 transition-opacity"
-        >
-          <svg width="8" height="13" viewBox="0 0 8 13" fill="none">
-            <path d="M7 1L1 6.5L7 12" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-          Inicio
-        </button>
+        {/* Left: ← Turno + 🏠 */}
+        <div className="flex items-center gap-2">
+          {/* ← vuelve a las shift cards del día */}
+          <button onClick={goBack}
+            className="flex items-center gap-1 text-blue-500 text-[14px] font-medium active:opacity-60 transition-opacity">
+            <svg width="8" height="13" viewBox="0 0 8 13" fill="none">
+              <path d="M7 1L1 6.5L7 12" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            Turno
+          </button>
 
-        {/* Shift badge */}
-        <span className={`text-[12px] font-semibold px-3 py-1 rounded-full ${SHIFT_BADGE[shift]}`}>
-          {SHIFT_LABELS[shift]}
-        </span>
+          {/* 🏠 va al calendario */}
+          <button onClick={goHome}
+            className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-100 text-gray-500 active:opacity-60 transition-opacity ml-1"
+            aria-label="Calendario">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z"/>
+              <path d="M9 21V12h6v9"/>
+            </svg>
+          </button>
+        </div>
 
-        {/* Actions */}
+        {/* Center: turno pill + reloj */}
+        <div className={`flex flex-col items-center px-4 py-1 rounded-2xl ${SHIFT_BADGE[shift]}`}>
+          <span className="text-[12px] font-bold leading-tight">{SHIFT_LABELS[shift]}</span>
+          <span className="text-[11px] font-mono tabular-nums opacity-80">{clock}</span>
+        </div>
+
+        {/* Right: acciones */}
         <div className="flex items-center gap-1.5">
-          {/* Save success flash */}
           {saveOk && !isEditing && (
             <span className="text-[13px] text-green-600 font-medium animate-fade-in">Guardado ✓</span>
           )}
-
           {!isEditing && mode !== 'create' && (
             <>
               <button onClick={() => setIsEditing(true)}
-                className="text-blue-500 text-[14px] font-semibold px-2 py-1 active:opacity-60 transition-opacity">
-                Editar
-              </button>
+                className="text-blue-500 text-[14px] font-semibold px-2 py-1 active:opacity-60">Editar</button>
               <button onClick={() => setShowDelete(true)}
-                className="text-red-500 text-[14px] font-semibold px-2 py-1 active:opacity-60 transition-opacity">
-                Eliminar
-              </button>
+                className="text-red-500 text-[14px] font-semibold px-2 py-1 active:opacity-60">Eliminar</button>
             </>
           )}
-
           {isEditing && (
             <>
               {mode !== 'create' && (
                 <button onClick={() => setIsEditing(false)}
-                  className="text-gray-500 text-[14px] px-2 py-1 active:opacity-60">
-                  Cancelar
-                </button>
+                  className="text-gray-500 text-[14px] px-2 py-1 active:opacity-60">Cancelar</button>
               )}
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="bg-blue-500 text-white text-[13px] font-semibold px-4 py-1.5 rounded-full shadow-sm shadow-blue-200 active:bg-blue-600 transition-colors disabled:opacity-50"
-              >
+              <button onClick={handleSave} disabled={saving}
+                className="bg-blue-500 text-white text-[13px] font-semibold px-4 py-1.5 rounded-full shadow-sm shadow-blue-200 active:bg-blue-600 transition-colors disabled:opacity-50">
                 {saving ? 'Guardando…' : 'Guardar'}
               </button>
             </>
@@ -239,25 +374,19 @@ export default function BitacoraClient({
         </div>
       </header>
 
-      {/* ══ CONTENT ═══════════════════════════════════ */}
+      {/* ══ CONTENT ══ */}
       <main className="flex-1 px-4 py-4 space-y-3 max-w-lg mx-auto w-full pb-safe">
 
-        {/* ── Info header ─── */}
+        {/* Info header */}
         <div className="bg-white rounded-2xl card-shadow px-4 py-4 animate-fade-in">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">
-                {module.toUpperCase()}
-              </p>
-              <h1 className="text-[17px] font-bold text-gray-900 capitalize leading-snug">
-                {dateLabel}
-              </h1>
+              <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">{module.toUpperCase()}</p>
+              <h1 className="text-[17px] font-bold text-gray-900 capitalize leading-snug">{dateLabel}</h1>
               <p className="text-[13px] text-gray-400 mt-0.5">{SHIFT_TIMES[shift]}</p>
             </div>
             {isEditing && (
-              <span className="flex-shrink-0 text-[11px] font-semibold bg-amber-50 text-amber-600 px-2.5 py-1 rounded-full">
-                Editando
-              </span>
+              <span className="flex-shrink-0 text-[11px] font-semibold bg-amber-50 text-amber-600 px-2.5 py-1 rounded-full">Editando</span>
             )}
           </div>
         </div>
@@ -266,73 +395,123 @@ export default function BitacoraClient({
 
           {/* ── 1. Metadatos ─── */}
           <Card title="Metadatos" n={1}>
-            <Field label="Operador / Responsable">
-              <input
-                type="text"
-                name="operator_name"
-                defaultValue={log?.operator_name ?? operatorName}
-                readOnly={!isEditing}
-                placeholder="Nombre del operador"
-                className={fieldInput(isEditing)}
-              />
-            </Field>
+            <div className="space-y-3">
+              <Field label="Operador / Responsable">
+                <input type="text" name="operator_name"
+                  defaultValue={log?.operator_name ?? operatorName}
+                  readOnly={!isEditing} placeholder="Nombre del operador"
+                  className={fieldCls(isEditing)}
+                />
+              </Field>
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-0.5">
+                  Responsables adicionales
+                </label>
+                {extraResponsables.map((r, i) => (
+                  <div key={i} className="flex gap-2">
+                    <input type="text" value={r} readOnly={!isEditing}
+                      onChange={e => { const n = [...extraResponsables]; n[i] = e.target.value; setExtraResponsables(n) }}
+                      className={`${fieldCls(isEditing)} flex-1`}
+                    />
+                    {isEditing && (
+                      <button type="button"
+                        onClick={() => setExtraResponsables(prev => prev.filter((_, j) => j !== i))}
+                        className="px-3 text-red-400 text-[18px] active:opacity-60">×</button>
+                    )}
+                  </div>
+                ))}
+                {isEditing && (
+                  <button type="button" onClick={() => setExtraResponsables(prev => [...prev, ''])}
+                    className="w-full py-2.5 rounded-xl border border-dashed border-blue-200 text-blue-500 text-[13px] font-medium hover:bg-blue-50 transition-colors">
+                    + Agregar responsable
+                  </button>
+                )}
+              </div>
+            </div>
           </Card>
 
           {/* ── 2. Checklist ─── */}
           <Card title="Check-list operacional" n={2}>
-            <div className="space-y-4">
-              {(
-                [
-                  { key: 'generales',    label: 'Operaciones generales'    },
-                  { key: 'mantenimiento',label: 'Mantenimiento y limpieza'  },
-                  { key: 'equipos',      label: 'Estado de equipos'         },
-                ] as const
-              ).map(({ key, label }) => (
-                <div key={key}>
-                  <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2 px-0.5">
-                    {label}
-                  </p>
-                  <div className="space-y-1.5">
-                    {CHECKLIST_ITEMS[key].map(item => {
-                      const on = checked.has(item.key)
-                      return (
-                        <button
-                          key={item.key}
-                          type="button"
-                          onClick={() => toggleCheck(item.key)}
-                          className={`check-row w-full text-left ${on ? 'is-checked' : ''} ${!isEditing ? 'is-disabled' : ''}`}
-                        >
-                          {/* Circle check */}
-                          <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all
-                            ${on ? 'bg-green-500 border-green-500' : 'border-gray-300 bg-white'}`}>
-                            {on && (
+            <div className="space-y-2">
+              <div className="space-y-1.5">
+                {config.map(item => (
+                  <div key={item.id} className="flex items-center gap-2">
+                    <div className="flex-1">
+                      {editingItem?.id === item.id ? (
+                        <div className="flex gap-2">
+                          <input type="text" value={editingItem.label}
+                            onChange={e => setEditingItem({ ...editingItem, label: e.target.value })}
+                            className="flex-1 px-3 py-2 rounded-xl text-[14px] border border-blue-300 outline-none focus:ring-2 focus:ring-blue-50 bg-white"
+                            autoFocus
+                          />
+                          <button type="button" onClick={handleUpdateTask} disabled={taskPending}
+                            className="px-3 py-2 rounded-xl bg-blue-500 text-white text-[13px] font-semibold disabled:opacity-50">OK</button>
+                          <button type="button" onClick={() => setEditingItem(null)}
+                            className="px-3 py-2 rounded-xl bg-gray-100 text-gray-600 text-[13px]">✕</button>
+                        </div>
+                      ) : (
+                        <div className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors ${!item.active ? 'opacity-40' : ''}`}>
+                          <button type="button" onClick={() => toggleCheck(item.item_key)} disabled={!item.active}
+                            className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all
+                              ${checked.has(item.item_key) && item.active ? 'bg-green-500 border-green-500' : 'border-gray-300 bg-white'}`}>
+                            {checked.has(item.item_key) && item.active && (
                               <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
                                 <polyline points="2,6 5,9 10,3" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
                               </svg>
                             )}
-                          </span>
-                          <span className={`text-[14px] font-medium leading-tight
-                            ${on ? 'text-green-800' : 'text-gray-600'}`}>
+                          </button>
+                          <span className={`text-[14px] font-medium leading-tight flex-1
+                            ${checked.has(item.item_key) && item.active ? 'text-green-800' : 'text-gray-600'}`}>
                             {item.label}
                           </span>
-                          {/* Count badge on the right */}
-                          <span className="ml-auto flex-shrink-0 text-[11px]">
-                            {on ? '✓' : ''}
-                          </span>
+                        </div>
+                      )}
+                    </div>
+                    {isEditing && !editingItem && (
+                      <div className="flex gap-1 flex-shrink-0">
+                        <button type="button" onClick={() => setEditingItem({ id: item.id, label: item.label })}
+                          className="w-7 h-7 rounded-lg bg-gray-100 text-gray-400 text-[12px] flex items-center justify-center active:opacity-60"
+                          title="Editar">✎</button>
+                        <button type="button" onClick={() => handleToggleItem(item.id, !item.active)} disabled={taskPending}
+                          className={`w-7 h-7 rounded-lg text-[11px] flex items-center justify-center active:opacity-60 disabled:opacity-40 font-bold
+                            ${item.active ? 'bg-amber-50 text-amber-500' : 'bg-green-50 text-green-500'}`}
+                          title={item.active ? 'Desactivar' : 'Activar'}>
+                          {item.active ? '○' : '●'}
                         </button>
-                      )
-                    })}
+                        <button type="button" onClick={() => handleDeleteItem(item.id)} disabled={taskPending}
+                          className="w-7 h-7 rounded-lg bg-red-50 text-red-400 text-[13px] flex items-center justify-center active:opacity-60 disabled:opacity-40"
+                          title="Eliminar">×</button>
+                      </div>
+                    )}
                   </div>
+                ))}
+              </div>
+              
+              {isEditing && (
+              <div className="pt-2 space-y-2 border-t border-gray-100">
+                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pt-1">
+                  Nueva tarea — {module.toUpperCase()}
+                </p>
+                <div className="flex gap-2">
+                  <input type="text" value={newTaskLabel}
+                    onChange={e => setNewTaskLabel(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddTask())}
+                    placeholder="Descripción de la tarea…"
+                    className="flex-1 px-3.5 py-2.5 rounded-xl text-[14px] border border-gray-200 bg-gray-50 outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-50 transition-all"
+                  />
+                  <button type="button" onClick={handleAddTask} disabled={taskPending || !newTaskLabel.trim()}
+                    className="px-4 py-2.5 rounded-xl bg-blue-500 text-white text-[13px] font-semibold disabled:opacity-40 active:bg-blue-600 transition-colors">
+                    {taskPending ? '…' : 'Agregar'}
+                  </button>
                 </div>
-              ))}
+                <p className="text-[11px] text-gray-400">Las tareas se guardan para este módulo.</p>
+              </div> )}
 
-              {/* Summary pill */}
-              <div className="flex items-center gap-2 pt-1">
+              <div className="pt-1">
                 <span className={`text-[12px] font-semibold px-3 py-1 rounded-full
-                  ${checked.size === ALL_CHECKLIST.length
-                    ? 'bg-green-100 text-green-700'
-                    : 'bg-gray-100 text-gray-500'}`}>
-                  {checked.size} / {ALL_CHECKLIST.length} completados
+                  ${checked.size === ALL_KEYS.length && ALL_KEYS.length > 0
+                    ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                  {checked.size} / {ALL_KEYS.length} completados
                 </span>
               </div>
             </div>
@@ -341,177 +520,154 @@ export default function BitacoraClient({
           {/* ── 3. Parámetros numéricos ─── */}
           <Card title="Parámetros numéricos" n={3}>
             <div className="grid grid-cols-2 gap-x-3 gap-y-3">
-              <Field label="Bomba principal">{numField('pump_main_bar',     params?.pump_main_bar,     'Bar')}</Field>
-              <Field label="Bomba biofiltros">{numField('pump_biofilter_bar',params?.pump_biofilter_bar,'Bar')}</Field>
-              <Field label="Flujómetros">     {numField('flowmeter_lpm',     params?.flowmeter_lpm,    'L/min')}</Field>
-              <Field label="Buffer tank">     {numField('buffer_tank_bar',   params?.buffer_tank_bar,   'Bar')}</Field>
-              <Field label="Ingreso agua">    {numField('water_intake',      params?.water_intake,      'dientes')}</Field>
-              <Field label="Pozo">
-                <select
-                  name="well_level"
-                  disabled={!isEditing}
-                  defaultValue={params?.well_level ?? ''}
-                  className={fieldInput(isEditing)}
-                >
-                  <option value="">—</option>
-                  <option value="alto">Alto</option>
-                  <option value="rebase">Rebase</option>
-                </select>
-              </Field>
-              <Field label="Intake">   {numField('intake_value', params?.intake_value)}</Field>
-              <Field label="Ozono">    {numField('ozone_pct',    params?.ozone_pct,     '%')}</Field>
+              {isHAT(module) && (
+                <>
+                  <Field label="Bomba principal">  {numField('pump_main_bar',      params?.pump_main_bar,      'Bar')}</Field>
+                  <Field label="Bomba biofiltros"> {numField('pump_biofilter_bar', params?.pump_biofilter_bar, 'Bar')}</Field>
+                  <Field label="Flujómetro de Sala">      {numField('flowmeter_room_lpm',      params?.flowmeter_room_lpm,      'L/min')}</Field>
+                  <Field label="Flujómetros Bandejas">      {numField('flowmeter_lpm',      params?.flowmeter_lpm,      'L/min')}</Field>
+                  <Field label="Buffer tank">      {numField('buffer_tank_bar',    params?.buffer_tank_bar,    'Bar')}</Field>
+                  <Field label="Ingreso agua" className="col-span-2">
+                    {numField('water_intake', params?.water_intake, 'dientes')}
+                  </Field>
+                </>
+              )}
+              {isFF(module) && (
+                <>
+                  <Field label="Ozono">  {numField('ozone_pct',    params?.ozone_pct,    '%')}</Field>
+                  <Field label="Intake"> {numField('intake_value', params?.intake_value)}</Field>
+                  <Field label="Osmosis" className="col-span-2">
+                    <select name="osmosis_value" disabled={!isEditing}
+                      defaultValue={params?.osmosis_value ?? ''}
+                      className={fieldCls(isEditing)}>
+                      <option value="">—</option>
+                      {OSMOSIS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="pH">        {numField('ph_ff',       params?.ph_ff)}</Field>
+                  <Field label="Salinidad"> {numField('salinity_ff', params?.salinity_ff, 'ppt')}</Field>
+                  <Field label="ORP" className="col-span-2">
+                    {numField('orp_ff', params?.orp_ff, 'mV')}
+                  </Field>
+                </>
+              )}
             </div>
           </Card>
 
-          {/* ── 4. Dosificación ─── */}
-          <Card title="Dosificación" n={4}>
+          {/* ── 4. Químicos ─── */}
+          <Card title="Químicos" n={4}>
             <div className="grid grid-cols-2 gap-x-3 gap-y-3">
-              <Field label="Químico B">       {numField('chemical_b_kg',  params?.chemical_b_kg,  'kg')}</Field>
-              <Field label="Químico Cc">      {numField('chemical_cc',    params?.chemical_cc)}</Field>
-              <Field label="Bicarbonato">     {numField('bicarbonate_kg', params?.bicarbonate_kg, 'kg')}</Field>
-              <Field label="Cloruro">         {numField('chloride_kg',    params?.chloride_kg,    'kg')}</Field>
-              <Field label="Metabisulfito">   {numField('metabisulfite',  params?.metabisulfite)}</Field>
-              <Field label="Tipo alimentación">
-                <select
-                  name="feeding_type"
-                  disabled={!isEditing}
-                  defaultValue={params?.feeding_type ?? ''}
-                  className={fieldInput(isEditing)}
-                >
-                  <option value="">—</option>
-                  <option value="manual">Manual</option>
-                  <option value="automatica">Automática</option>
-                </select>
-              </Field>
-              <Field label="Cant. alimento" className="col-span-2">
-                {numField('feeding_amount', params?.feeding_amount, 'kg')}
-              </Field>
+              <Field label="Bicarbonato de sodio">{numField('bicarbonate_kg', params?.bicarbonate_kg, 'kg')}</Field>
+              <Field label="Cloruro de calcio">   {numField('chloride_kg',    params?.chloride_kg,    'kg')}</Field>
             </div>
           </Card>
 
           {/* ── 5. Fisicoquímicos ─── */}
-          <Card title="Parámetros fisicoquímicos" n={5}>
-            {/* Explanation */}
-            <p className="text-[12px] text-gray-400 mb-3 leading-relaxed">
-              Ingresa los valores por identificador y horario. Los campos pH, ORP y Salinidad aplican al registro general del turno.
-            </p>
-
-            {/* Scrollable table */}
-            <div className="overflow-x-auto -mx-4 px-4 scrollbar-none">
-              <table className="border-collapse" style={{ minWidth: 560 }}>
-                <thead>
-                  <tr>
-                    <th className="text-left text-[11px] font-bold text-gray-400 uppercase tracking-wide pb-3 pr-3 w-12 sticky left-0 bg-white z-10">
-                      ID
-                    </th>
-                    {/* 00:00 group */}
-                    <th colSpan={3} className="text-center text-[10px] font-bold text-indigo-400 uppercase tracking-wider pb-1 border-b-2 border-indigo-100">
-                      00:00
-                    </th>
-                    {/* 04:00 group */}
-                    <th colSpan={3} className="text-center text-[10px] font-bold text-blue-400 uppercase tracking-wider pb-1 border-b-2 border-blue-100 pl-2">
-                      04:00
-                    </th>
-                    {/* General */}
-                    <th colSpan={3} className="text-center text-[10px] font-bold text-teal-400 uppercase tracking-wider pb-1 border-b-2 border-teal-100 pl-2">
-                      General
-                    </th>
-                  </tr>
-                  <tr>
-                    <th />
-                    {/* 00:00 */}
-                    {['Sat%','O₂','T°C'].map(h => (
-                      <th key={`h00-${h}`} className="text-center text-[11px] text-gray-400 font-semibold pb-2 px-1 whitespace-nowrap">{h}</th>
-                    ))}
-                    {/* 04:00 */}
-                    {['Sat%','O₂','T°C'].map(h => (
-                      <th key={`h04-${h}`} className="text-center text-[11px] text-gray-400 font-semibold pb-2 px-1 whitespace-nowrap">{h}</th>
-                    ))}
-                    {/* General */}
-                    {['pH','ORP','Sal'].map(h => (
-                      <th key={`hg-${h}`} className="text-center text-[11px] text-gray-400 font-semibold pb-2 px-1 whitespace-nowrap">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {/* Separator rows for C vs TK */}
-                  {FQ_IDENTIFIERS.map((id, rowIdx) => {
-                    const prevId = FQ_IDENTIFIERS[rowIdx - 1]
-                    const isTKstart = id === 'TK1' && prevId?.startsWith('C')
-                    const isC = id.startsWith('C')
-
-                    return (
-                      <>
-                        {isTKstart && (
-                          <tr key="sep-tk">
-                            <td colSpan={10} className="py-1">
-                              <div className="h-px bg-gray-100 my-1" />
-                            </td>
-                          </tr>
-                        )}
-                        <tr key={id} className={`transition-colors ${isC ? '' : 'bg-blue-50/30'}`}>
-                          {/* ID cell — sticky on mobile */}
-                          <td className="pr-3 py-1.5 font-bold text-[13px] text-blue-500 sticky left-0 bg-white whitespace-nowrap">
-                            {id}
+          {fqIds.length > 0 && (
+            <Card title="Parámetros fisicoquímicos" n={5}>
+              <p className="text-[12px] text-gray-400 mb-3 leading-relaxed">
+                Sat% y O₂ (Mg/L) por identificador. Temperatura compartida por horario.
+              </p>
+              <div className="flex gap-2 mb-4">
+                {(['A', 'B'] as const).map(tab => (
+                  <button key={tab} type="button" onClick={() => setActiveSlot(tab)}
+                    className={`flex-1 py-2 rounded-xl text-[13px] font-semibold transition-colors
+                      ${activeSlot === tab ? 'bg-blue-500 text-white shadow-sm shadow-blue-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
+                    {tab === 'A' ? slotA : slotB}
+                  </button>
+                ))}
+              </div>
+              <div className="mb-4">
+                <Field label={`Temperatura ${currentSlot}`}>
+                  <div className="relative">
+                    <input type="number" step="0.01"
+                      value={activeSlot === 'A' ? tempSlotA : tempSlotB}
+                      onChange={e => activeSlot === 'A' ? setTempSlotA(e.target.value) : setTempSlotB(e.target.value)}
+                      readOnly={!isEditing} placeholder={isEditing ? '0.00' : '—'}
+                      className={`${fieldCls(isEditing)} pr-10`}
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-gray-400 font-medium pointer-events-none">°C</span>
+                  </div>
+                </Field>
+              </div>
+              <div className="overflow-x-auto -mx-4 px-4 scrollbar-none">
+                <table className="border-collapse w-full">
+                  <thead>
+                    <tr>
+                      <th className="text-left text-[11px] font-bold text-gray-400 uppercase tracking-wide pb-2 pr-3 sticky left-0 bg-white z-10 w-12">ID</th>
+                      <th className="text-center text-[11px] text-gray-400 font-semibold pb-2 px-2">Sat%</th>
+                      <th className="text-center text-[11px] text-gray-400 font-semibold pb-2 px-2">Mg/L</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {fqIds.map(id => (
+                      <tr key={id}>
+                        <td className="pr-3 py-1.5 font-bold text-[13px] text-blue-500 sticky left-0 bg-white whitespace-nowrap">{id}</td>
+                        {(['o2_saturation', 'dissolved_o2'] as const).map(field => (
+                          <td key={field} className="px-1 py-1.5">
+                            <input type="number" step="0.01"
+                              value={fqData[id]?.[currentSlot]?.[field] ?? ''}
+                              onChange={e => setFQ(id, currentSlot, field, e.target.value)}
+                              readOnly={!isEditing}
+                              className="fq-input w-full text-center" placeholder="—"
+                            />
                           </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
 
-                          {/* 00:00 fields */}
-                          {(['o2_saturation','dissolved_o2','temperature'] as const).map(field => (
-                            <td key={`00-${field}`} className="px-1 py-1.5">
-                              <input
-                                type="number" step="0.01"
-                                value={fqData[id]?.['00:00']?.[field] ?? ''}
-                                onChange={e => setFQ(id, '00:00', field, e.target.value)}
-                                readOnly={!isEditing}
-                                className={`fq-input ${isEditing ? 'editing' : ''}`}
-                                placeholder="—"
-                              />
-                            </td>
-                          ))}
+          {/* ── 6. Pozo (HAT only) ─── */}
+          {isHAT(module) && (
+            <Card title="Parámetros de Pozo" n={6}>
+              <div className="flex gap-2 mb-4">
+                {(['A', 'B'] as const).map(tab => (
+                  <button key={tab} type="button" onClick={() => setActiveSlot(tab)}
+                    className={`flex-1 py-2 rounded-xl text-[13px] font-semibold transition-colors
+                      ${activeSlot === tab ? 'bg-indigo-500 text-white shadow-sm' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
+                    {tab === 'A' ? slotA : slotB}
+                  </button>
+                ))}
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <Field label="Temperatura">
+                  <div className="relative">
+                    <input type="number" step="0.01"
+                      value={pozoData[currentSlot]?.temperature ?? ''}
+                      onChange={e => setPozo(currentSlot, 'temperature', e.target.value)}
+                      readOnly={!isEditing} placeholder={isEditing ? '0.00' : '—'}
+                      className={`${fieldCls(isEditing)} pr-8`}
+                    />
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 pointer-events-none">°C</span>
+                  </div>
+                </Field>
+                <Field label="Sat%">
+                  <input type="number" step="0.01"
+                    value={pozoData[currentSlot]?.o2_saturation ?? ''}
+                    onChange={e => setPozo(currentSlot, 'o2_saturation', e.target.value)}
+                    readOnly={!isEditing} placeholder={isEditing ? '0.00' : '—'}
+                    className={fieldCls(isEditing)}
+                  />
+                </Field>
+                <Field label="Mg/L">
+                  <input type="number" step="0.01"
+                    value={pozoData[currentSlot]?.dissolved_o2 ?? ''}
+                    onChange={e => setPozo(currentSlot, 'dissolved_o2', e.target.value)}
+                    readOnly={!isEditing} placeholder={isEditing ? '0.00' : '—'}
+                    className={fieldCls(isEditing)}
+                  />
+                </Field>
+              </div>
+            </Card>
+          )}
 
-                          {/* 04:00 fields */}
-                          {(['o2_saturation','dissolved_o2','temperature'] as const).map(field => (
-                            <td key={`04-${field}`} className="px-1 py-1.5">
-                              <input
-                                type="number" step="0.01"
-                                value={fqData[id]?.['04:00']?.[field] ?? ''}
-                                onChange={e => setFQ(id, '04:00', field, e.target.value)}
-                                readOnly={!isEditing}
-                                className={`fq-input ${isEditing ? 'editing' : ''}`}
-                                placeholder="—"
-                              />
-                            </td>
-                          ))}
-
-                          {/* General params (pH, ORP, salinity) */}
-                          {(['ph','orp','salinity'] as const).map(field => (
-                            <td key={`gen-${field}`} className="px-1 py-1.5">
-                              <input
-                                type="number" step="0.01"
-                                value={fqData[id]?.['00:00']?.[field] ?? ''}
-                                onChange={e => setFQ(id, '00:00', field, e.target.value)}
-                                readOnly={!isEditing}
-                                className={`fq-input ${isEditing ? 'editing' : ''}`}
-                                placeholder="—"
-                              />
-                            </td>
-                          ))}
-                        </tr>
-                      </>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-
-          {/* ── 6. Notas ─── */}
-          <Card title="Observaciones" n={6}>
-            <textarea
-              name="notes"
-              rows={4}
-              readOnly={!isEditing}
+          {/* ── 7. Observaciones ─── */}
+          <Card title="Observaciones" n={isHAT(module) ? 7 : 6}>
+            <textarea name="notes" rows={4} readOnly={!isEditing}
               defaultValue={log?.notes ?? ''}
               placeholder={isEditing ? 'Escribe observaciones del turno aquí…' : 'Sin observaciones registradas.'}
               className={`w-full px-3.5 py-3 rounded-xl text-[14px] resize-none border outline-none transition-all leading-relaxed
@@ -524,56 +680,40 @@ export default function BitacoraClient({
         </form>
       </main>
 
-      {/* ══ DELETE BOTTOM SHEET ════════════════════════ */}
+      {/* ══ DELETE SHEET ══ */}
       {showDelete && (
         <div className="fixed inset-0 z-50 flex items-end bg-black/40">
           <div className="animate-slide-up bg-white rounded-t-3xl w-full max-w-lg mx-auto px-5 pt-4 pb-safe space-y-4">
-            {/* Handle */}
             <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto" />
-
-            {/* Icon */}
             <div className="w-14 h-14 rounded-2xl bg-red-100 flex items-center justify-center mx-auto">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round">
                 <polyline points="3 6 5 6 21 6"/>
-                <path d="M19 6l-1 14H6L5 6"/>
-                <path d="M10 11v6"/><path d="M14 11v6"/>
+                <path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/>
                 <path d="M9 6V4h6v2"/>
               </svg>
             </div>
-
             <div className="text-center space-y-1">
               <h3 className="text-[18px] font-bold text-gray-900">Eliminar bitácora</h3>
               <p className="text-[13px] text-gray-500 leading-relaxed">
-                Se eliminarán todos los datos del turno: checklist, parámetros y registros fisicoquímicos. Esta acción no puede deshacerse.
+                Se eliminarán todos los datos del turno. Esta acción no puede deshacerse.
               </p>
             </div>
-
             <div className="space-y-1.5">
               <label className="text-[12px] font-bold text-gray-500 uppercase tracking-wider px-0.5">
                 Escribe <span className="text-red-500 font-mono">ELIMINAR</span> para confirmar
               </label>
-              <input
-                type="text"
-                value={deleteInput}
-                onChange={e => setDeleteInput(e.target.value)}
-                placeholder="ELIMINAR"
-                autoCapitalize="characters"
+              <input type="text" value={deleteInput} onChange={e => setDeleteInput(e.target.value)}
+                placeholder="ELIMINAR" autoCapitalize="characters"
                 className="w-full px-4 py-3.5 bg-gray-50 rounded-2xl text-[15px] font-mono border border-gray-200 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-50 transition-all"
               />
             </div>
-
             <div className="flex gap-3 pb-2">
-              <button
-                onClick={() => { setShowDelete(false); setDeleteInput('') }}
-                className="flex-1 py-3.5 rounded-2xl bg-gray-100 text-gray-700 font-semibold text-[15px] active:bg-gray-200 transition-colors"
-              >
+              <button onClick={() => { setShowDelete(false); setDeleteInput('') }}
+                className="flex-1 py-3.5 rounded-2xl bg-gray-100 text-gray-700 font-semibold text-[15px] active:bg-gray-200 transition-colors">
                 Cancelar
               </button>
-              <button
-                onClick={handleDelete}
-                disabled={deleteInput !== 'ELIMINAR' || deleting}
-                className="flex-1 py-3.5 rounded-2xl bg-red-500 text-white font-semibold text-[15px] active:bg-red-600 transition-colors disabled:opacity-35"
-              >
+              <button onClick={handleDelete} disabled={deleteInput !== 'ELIMINAR' || deleting}
+                className="flex-1 py-3.5 rounded-2xl bg-red-500 text-white font-semibold text-[15px] active:bg-red-600 transition-colors disabled:opacity-35">
                 {deleting ? 'Eliminando…' : 'Eliminar'}
               </button>
             </div>
@@ -584,18 +724,12 @@ export default function BitacoraClient({
   )
 }
 
-/* ── Helper sub-components ───────────────────────── */
-function Card({
-  title, n, children,
-}: {
-  title: string; n: number; children: React.ReactNode
-}) {
+/* ── Sub-components ─── */
+function Card({ title, n, children }: { title: string; n: number; children: React.ReactNode }) {
   return (
     <div className="bg-white rounded-2xl card-shadow overflow-hidden animate-fade-in">
       <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2.5">
-        <span className="w-6 h-6 rounded-lg bg-blue-50 text-blue-500 text-[11px] font-bold flex items-center justify-center flex-shrink-0">
-          {n}
-        </span>
+        <span className="w-6 h-6 rounded-lg bg-blue-50 text-blue-500 text-[11px] font-bold flex items-center justify-center flex-shrink-0">{n}</span>
         <span className="text-[14px] font-semibold text-gray-900">{title}</span>
       </div>
       <div className="px-4 py-4">{children}</div>
@@ -603,16 +737,10 @@ function Card({
   )
 }
 
-function Field({
-  label, children, className = '',
-}: {
-  label: string; children: React.ReactNode; className?: string
-}) {
+function Field({ label, children, className = '' }: { label: string; children: React.ReactNode; className?: string }) {
   return (
     <div className={`space-y-1 ${className}`}>
-      <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-0.5">
-        {label}
-      </label>
+      <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-0.5">{label}</label>
       {children}
     </div>
   )

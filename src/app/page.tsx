@@ -1,4 +1,4 @@
-// Main Page
+
 // src/app/page.tsx
 import { redirect } from 'next/navigation';
 

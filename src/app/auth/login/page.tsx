@@ -1,103 +1,113 @@
-//src/app/auth/login/page.tsx
+// src/app/auth/login/page.tsx
 
 import { login } from '../actions'
 import RutInput from '@/components/ui/RutInput'
-import Link from 'next/link'
+import { Lock, AlertCircle, CheckCircle2 } from 'lucide-react'
 
 interface Props {
   searchParams: Promise<{ error?: string; success?: string }>
 }
 
-
 export default async function LoginPage({ searchParams }: Props) {
   const params = await searchParams
 
-  return (
-    <div className="min-h-dvh bg-[#F2F2F7] flex flex-col select-none">
-      <div className="flex-1 flex flex-col justify-end px-5 pb-10 pt-20">
+  
 
-        {/* Brand */}
-        <div className="mb-8">
-          <div className="w-16 h-16 bg-blue-500 rounded-[20px] flex items-center justify-center mb-5 shadow-lg shadow-blue-200">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="white">
-              <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
-            </svg>
+  return (
+    <div className="min-h-dvh flex items-center justify-center px-4 bg-[#f2f2f7]">
+
+      <div className="w-full max-w-md">
+
+        {/* Header */}
+        <div className="text-center mb-8">
+          <div className="mx-auto mb-4 w-[76px] h-[76px] rounded-[22px] flex items-center justify-center bg-black/90">
+            <Lock size={30} className="text-white" />
           </div>
-          <h1 className="text-[34px] font-bold text-gray-900 tracking-tight leading-none">
+
+          <h1 className="text-3xl font-semibold tracking-tight text-black">
             Aquaria
           </h1>
-          <p className="text-[15px] text-gray-500 mt-2">
+          <p className="text-sm text-gray-500 mt-1">
             Sistema de bitácoras operativas
           </p>
         </div>
 
-        {/* Error alert */}
-        {params.error && (
-          <div className="bg-red-50 border border-red-100 rounded-2xl px-4 py-3 mb-4 flex items-center gap-2.5">
-            <span className="w-5 h-5 rounded-full bg-red-100 text-red-500 flex items-center justify-center text-[11px] font-bold flex-shrink-0">
-              !
-            </span>
-            <p className="text-[13px] text-red-600">
-              {decodeURIComponent(params.error)}
-            </p>
+        {/* Alertas */}
+        {(params.error || params.success) && (
+          <div className="mb-4 space-y-2">
+            {params.error && (
+              <div className="flex items-start gap-2 px-4 py-3 rounded-2xl 
+                bg-red-50/80 backdrop-blur-md border border-red-100 shadow-sm">
+                
+                <AlertCircle size={16} className="text-red-500 mt-[2px]" />
+                
+                <p className="text-[13px] text-red-600 leading-snug">
+                  {decodeURIComponent(params.error)}
+                </p>
+              </div>
+            )}
+
+            {params.success && (
+              <div className="flex items-start gap-2 px-4 py-3 rounded-2xl 
+                bg-gray-50/80 backdrop-blur-md border border-gray-200 shadow-sm">
+                
+                <CheckCircle2 size={16} className="text-gray-900 mt-[2px]" />
+                
+                <p className="text-[13px] text-gray-800 leading-snug">
+                  {decodeURIComponent(params.success)}
+                </p>
+              </div>
+            )}
           </div>
         )}
 
-        {/* Success alert (viene de /register) */}
-        {params.success && (
-          <div className="bg-green-50 border border-green-100 rounded-2xl px-4 py-3 mb-4 flex items-center gap-2.5">
-            <span className="w-5 h-5 rounded-full bg-green-100 text-green-600 flex items-center justify-center text-[11px] font-bold flex-shrink-0">
-              ✓
-            </span>
-            <p className="text-[13px] text-green-700">
-              {decodeURIComponent(params.success)}
-            </p>
-          </div>
-        )}
+        {/* Card */}
+        <div className="bg-white rounded-[32px] shadow-sm border border-gray-200">
 
-        {/* Form card */}
-        <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
-          <form action={login} className="p-5 space-y-4">
+          <form action={login} className="p-6 space-y-5">
 
-            <div className="space-y-1.5">
-              <label className="text-[12px] font-semibold text-gray-400 uppercase tracking-wider px-1">
+            {/* RUT */}
+            <div>
+              <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 block">
                 RUT
               </label>
-              <RutInput name="rut" required />
+
+              <div className="bg-[#f2f2f7] rounded-full px-4 focus-within:ring-2 focus-within:ring-black/10 transition">
+                <RutInput name="rut" required />
+              </div>
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-[12px] font-semibold text-gray-400 uppercase tracking-wider px-1">
+            {/* Password */}
+            <div>
+              <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 block">
                 Contraseña
               </label>
+
               <input
                 type="password"
                 name="password"
                 placeholder="••••••••"
                 required
                 autoComplete="current-password"
-                className="w-full px-4 py-3.5 bg-gray-50 rounded-2xl text-[15px] text-gray-900
-                  placeholder-gray-400 border border-gray-100 outline-none transition-all
-                  focus:bg-white focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                className="w-full px-4 py-3 text-[15px] rounded-full bg-[#f2f2f7] outline-none focus:ring-2 focus:ring-black/10 transition"
               />
             </div>
 
+            {/* Botón */}
             <button
               type="submit"
-              className="w-full bg-blue-500 active:bg-blue-600 text-white font-semibold
-                text-[16px] py-4 rounded-2xl transition-colors mt-1 shadow-md shadow-blue-200"
+              className="cursor-pointer w-full py-3 rounded-full text-white font-semibold text-[15px] bg-black active:scale-[0.97] transition"
             >
               Ingresar
             </button>
+        
 
           </form>
         </div>
 
-        <p className="text-center text-[14px] text-gray-500 mt-5">
-          ¿No tienes cuenta?{' '}
-          <Link href="/auth/register" className="text-blue-500 font-semibold">
-            Regístrate
-          </Link>
+        {/* Footer */}
+        <p className="text-center text-sm text-gray-500 mt-6">
+         
         </p>
 
       </div>
