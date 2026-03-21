@@ -46,12 +46,26 @@ function parseAdditionalOperators(arr: string[]): string | null {
   return filtered.length > 0 ? filtered.join(', ') : null
 }
 
+/* ── Convierte valor de BD (string | number | null) → number | undefined ── */
+function toNum(v: unknown): number | undefined {
+  if (v === null || v === undefined || v === '') return undefined
+  const n = typeof v === 'number' ? v : parseFloat(String(v))
+  return isNaN(n) ? undefined : n
+}
+
+/* ── Devuelve true si al menos uno de los campos tiene valor real ── */
+function hasAnyValue(entry: Record<string, unknown>, keys: string[]): boolean {
+  return keys.some(k => entry[k] !== null && entry[k] !== undefined)
+}
+
 /* ── Component ─────────────────────────────────────── */
 export default function BitacoraClient({
   logFull, module, date, shift, mode, operatorName, checklistConfig: initialConfig,
 }: Props) {
-  const router  = useRouter()
-  const formRef = useRef<HTMLFormElement>(null)
+  const router      = useRouter()
+  const formRef     = useRef<HTMLFormElement>(null)
+  // Ref para bloquear doble ejecución del guardado (race condition)
+  const isSavingRef = useRef(false)
 
   /* ── UI state ─── */
   const [isEditing,  setIsEditing]  = useState(mode === 'create')
@@ -64,18 +78,14 @@ export default function BitacoraClient({
   const [activeSlot, setActiveSlot] = useState<'A' | 'B'>('A')
 
   /* ── Navigation helpers ─── */
-  // ← Turno: vuelve al dashboard con el día y módulo seleccionados (restaura las shift cards)
-  function goBack() {
-    router.push(`/dashboard?module=${module}&date=${date}`)
-  }
-  // 🏠 Home: vuelve al calendario sin estado previo
-  function goHome() {
-    router.push('/dashboard')
-  }
+  function goBack() { router.push(`/dashboard?module=${module}&date=${date}`) }
+  function goHome()  { router.push(`/dashboard?module=${module}`) }
 
   /* ── Clock ─── */
   useEffect(() => {
-    const tick = () => setClock(new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', second: '2-digit' }))
+    const tick = () => setClock(new Date().toLocaleTimeString('es-CL', {
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+    }))
     tick()
     const id = setInterval(tick, 1000)
     return () => clearInterval(id)
@@ -86,7 +96,7 @@ export default function BitacoraClient({
   const currentSlot    = activeSlot === 'A' ? slotA : slotB
   const fqIds          = isHAT(module) ? FQ_IDENTIFIERS_HAT : isFF(module) ? FQ_IDENTIFIERS_FF : []
 
-  /* ── Checklist config state ─── */
+  /* ── Checklist config ─── */
   const [config,       setConfig]       = useState<ChecklistConfigItem[]>(initialConfig ?? [])
   const [newTaskLabel, setNewTaskLabel] = useState('')
   const [editingItem,  setEditingItem]  = useState<{ id: string; label: string } | null>(null)
@@ -99,12 +109,10 @@ export default function BitacoraClient({
     new Set(logFull?.checklist.filter(c => c.checked).map(c => c.item_key) ?? [])
   )
 
-  
-  
-
-  
-
-  /* ── FQ state ─── */
+  /* ── FQ state ───────────────────────────────────────────────────────────────
+   * Supabase retorna valores numéricos como strings ("100.00").
+   * toNum() los convierte a number para que los inputs controlados funcionen.
+   * ─────────────────────────────────────────────────────────────────────────── */
   const [fqData, setFqData] = useState<FQState>(() => {
     const map: FQState = {}
     fqIds.forEach(id => {
@@ -112,7 +120,11 @@ export default function BitacoraClient({
       ;[slotA, slotB].forEach(ts => {
         const f = logFull?.fisicoquimicos.find(r => r.identifier === id && r.time_slot === ts)
         map[id][ts] = f
-          ? { o2_saturation: f.o2_saturation ?? undefined, dissolved_o2: f.dissolved_o2 ?? undefined, temperature: f.temperature ?? undefined }
+          ? {
+              o2_saturation: toNum(f.o2_saturation),
+              dissolved_o2:  toNum(f.dissolved_o2),
+              temperature:   toNum(f.temperature),
+            }
           : {}
       })
     })
@@ -121,11 +133,13 @@ export default function BitacoraClient({
 
   const [tempSlotA, setTempSlotA] = useState<string>(() => {
     const f = logFull?.fisicoquimicos.find(r => r.time_slot === slotA)
-    return f?.temperature != null ? String(f.temperature) : ''
+    const n = toNum(f?.temperature)
+    return n !== undefined ? String(n) : ''
   })
   const [tempSlotB, setTempSlotB] = useState<string>(() => {
     const f = logFull?.fisicoquimicos.find(r => r.time_slot === slotB)
-    return f?.temperature != null ? String(f.temperature) : ''
+    const n = toNum(f?.temperature)
+    return n !== undefined ? String(n) : ''
   })
 
   /* ── Pozo state (HAT only) ─── */
@@ -133,9 +147,9 @@ export default function BitacoraClient({
     const map: PozoState = { [slotA]: {}, [slotB]: {} }
     logFull?.pozo?.forEach(r => {
       map[r.time_slot] = {
-        temperature:   r.temperature   ?? undefined,
-        o2_saturation: r.o2_saturation ?? undefined,
-        dissolved_o2:  r.dissolved_o2  ?? undefined,
+        temperature:   toNum(r.temperature),
+        o2_saturation: toNum(r.o2_saturation),
+        dissolved_o2:  toNum(r.dissolved_o2),
       }
     })
     return map
@@ -145,8 +159,8 @@ export default function BitacoraClient({
   const log    = logFull?.log
 
   /* ── Responsables adicionales ─── */
-const [extraResponsables, setExtraResponsables] = useState<string[]>(() => {
-  const raw = log?.additional_operators
+  const [extraResponsables, setExtraResponsables] = useState<string[]>(() => {
+    const raw = log?.additional_operators
     if (!raw) return []
     return raw.split(', ').filter(s => s.trim() !== '')
   })
@@ -158,12 +172,19 @@ const [extraResponsables, setExtraResponsables] = useState<string[]>(() => {
   /* ── Helpers ─── */
   function toggleCheck(key: string) {
     if (!isEditing) return
-    setChecked(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n })
+    setChecked(prev => {
+      const n = new Set(prev)
+      n.has(key) ? n.delete(key) : n.add(key)
+      return n
+    })
   }
 
   function setFQ(id: string, ts: string, field: keyof FQCell, raw: string) {
     const v = raw === '' ? undefined : parseFloat(raw)
-    setFqData(prev => ({ ...prev, [id]: { ...prev[id], [ts]: { ...prev[id]?.[ts], [field]: v } } }))
+    setFqData(prev => ({
+      ...prev,
+      [id]: { ...prev[id], [ts]: { ...prev[id]?.[ts], [field]: v } },
+    }))
   }
 
   function setPozo(ts: string, field: keyof PozoCell, raw: string) {
@@ -203,89 +224,123 @@ const [extraResponsables, setExtraResponsables] = useState<string[]>(() => {
     setTaskPending(false)
   }
 
- 
+  /* ── Construir entradas FQ ──────────────────────────────────────────────────
+   * filterEmpty=true  → create: omite filas donde todo es null
+   * filterEmpty=false → update: incluye todas las filas (null borra en BD)
+   * ─────────────────────────────────────────────────────────────────────────── */
+  function buildFqEntries(filterEmpty: boolean): Record<string, unknown>[] {
+    const tempA = tempSlotA !== '' ? parseFloat(tempSlotA) : null
+    const tempB = tempSlotB !== '' ? parseFloat(tempSlotB) : null
+    const entries: Record<string, unknown>[] = []
 
-  /* ── Save ─── */
-  async function handleSave() {
-  if (!formRef.current) return
-  setSaving(true)
-  
-  // Construir fqEntries y pozoEntries ANTES del if/else
-  const fqEntries: Record<string, unknown>[] = []
-  console.log('fqEntries antes de updateLog:', fqEntries)
-  const tempA = tempSlotA !== '' ? parseFloat(tempSlotA) : undefined
-  const tempB = tempSlotB !== '' ? parseFloat(tempSlotB) : undefined
-  fqIds.forEach(id => {
-    ;[slotA, slotB].forEach(ts => {
-      const cell = { ...fqData[id]?.[ts] ?? {} }
-      if (ts === slotA && tempA !== undefined) cell.temperature = tempA
-      if (ts === slotB && tempB !== undefined) cell.temperature = tempB
-      if (Object.values(cell).some(v => v !== undefined))
-        fqEntries.push({ identifier: id, time_slot: ts, ...cell })
+    fqIds.forEach(id => {
+      ;[slotA, slotB].forEach(ts => {
+        const cell = fqData[id]?.[ts] ?? {}
+        const entry: Record<string, unknown> = {
+          identifier:    id,
+          time_slot:     ts,
+          o2_saturation: cell.o2_saturation ?? null,
+          dissolved_o2:  cell.dissolved_o2  ?? null,
+          temperature:   ts === slotA ? tempA : tempB,
+        }
+        if (filterEmpty && !hasAnyValue(entry, ['o2_saturation', 'dissolved_o2', 'temperature'])) return
+        entries.push(entry)
+      })
     })
-  })
 
-  const pozoEntries: Record<string, unknown>[] = []
-  if (isHAT(module)) {
+    return entries
+  }
+
+  /* ── Construir entradas Pozo ─── */
+  function buildPozoEntries(filterEmpty: boolean): Record<string, unknown>[] {
+    const entries: Record<string, unknown>[] = []
+    if (!isHAT(module)) return entries
+
     ;[slotA, slotB].forEach(ts => {
       const cell = pozoData[ts] ?? {}
-      if (Object.values(cell).some(v => v !== undefined))
-        pozoEntries.push({ time_slot: ts, ...cell })
-    })
-  }
-
-  if (mode === 'create') {
-  const form = formRef.current
-  const numInputs = form.querySelectorAll('input[type="number"], select')
-  const payload: Record<string, unknown> = {
-    module_slug:          module,
-    log_date:             date,
-    shift:                shift,
-    operator_name:        (form.querySelector('[name="operator_name"]') as HTMLInputElement)?.value,
-    notes:                (form.querySelector('[name="notes"]') as HTMLTextAreaElement)?.value,
-    additional_operators: parseAdditionalOperators(extraResponsables),
-    checklist_keys:       ALL_KEYS,
-    fisicoquimicos:       fqEntries,
-    pozo:                 pozoEntries,
-  }
-  ALL_KEYS.forEach(key => { payload[`check_${key}`] = checked.has(key) })
-  numInputs.forEach(el => {
-    const input = el as HTMLInputElement | HTMLSelectElement
-    if (input.name) {
-      payload[input.name] = input.type === 'number'
-        ? (input.value !== '' ? parseFloat(input.value) : null)
-        : (input.value || null)
-    }
-  })
-  await createLog(payload)
-} else if (log) {
-    const form = formRef.current
-    const numInputs = form.querySelectorAll('input[type="number"], select')
-    const payload: Record<string, unknown> = {
-      operator_name:        (form.querySelector('[name="operator_name"]') as HTMLInputElement)?.value,
-      notes:                (form.querySelector('[name="notes"]') as HTMLTextAreaElement)?.value,
-      additional_operators: parseAdditionalOperators(extraResponsables),
-      checklist_keys:       ALL_KEYS,
-      fisicoquimicos:       fqEntries,
-      pozo:                 pozoEntries,
-    }
-    ALL_KEYS.forEach(key => { payload[`check_${key}`] = checked.has(key) })
-    numInputs.forEach(el => {
-      const input = el as HTMLInputElement | HTMLSelectElement
-      if (input.name) {
-        payload[input.name] = input.type === 'number'
-          ? (input.value !== '' ? parseFloat(input.value) : null)
-          : (input.value || null)
+      const entry: Record<string, unknown> = {
+        time_slot:     ts,
+        temperature:   cell.temperature   ?? null,
+        o2_saturation: cell.o2_saturation ?? null,
+        dissolved_o2:  cell.dissolved_o2  ?? null,
       }
+      if (filterEmpty && !hasAnyValue(entry, ['temperature', 'o2_saturation', 'dissolved_o2'])) return
+      entries.push(entry)
     })
-    await updateLog(log.id, payload)
-    setIsEditing(false)
-    setSaveOk(true)
-    setTimeout(() => setSaveOk(false), 2500)
+
+    return entries
   }
 
-  setSaving(false)
-}
+  /* ── Save ───────────────────────────────────────────────────────────────────
+   * isSavingRef bloquea doble ejecución causada por doble click.
+   * setSaving controla el estado visual del botón.
+   * ─────────────────────────────────────────────────────────────────────────── */
+  async function handleSave() {
+    if (!formRef.current)    return
+    if (isSavingRef.current) return  // bloquea segunda llamada antes de que termine la primera
+    isSavingRef.current = true
+    setSaving(true)
+
+    try {
+      if (mode === 'create') {
+        const form      = formRef.current
+        const numInputs = form.querySelectorAll('input[type="number"], select')
+        const payload: Record<string, unknown> = {
+          module_slug:          module,
+          log_date:             date,
+          shift,
+          operator_name:        (form.querySelector('[name="operator_name"]') as HTMLInputElement)?.value,
+          notes:                (form.querySelector('[name="notes"]') as HTMLTextAreaElement)?.value,
+          additional_operators: parseAdditionalOperators(extraResponsables),
+          checklist_keys:       ALL_KEYS,
+          fisicoquimicos:       buildFqEntries(true),
+          pozo:                 buildPozoEntries(true),
+        }
+        ALL_KEYS.forEach(key => { payload[`check_${key}`] = checked.has(key) })
+        numInputs.forEach(el => {
+          const input = el as HTMLInputElement | HTMLSelectElement
+          if (input.name) {
+            payload[input.name] = input.type === 'number'
+              ? (input.value !== '' ? parseFloat(input.value) : null)
+              : (input.value || null)
+          }
+        })
+        await createLog(payload)
+        // El server action hace redirect() — el código no continúa desde aquí
+        return
+      }
+
+      if (log) {
+        const form      = formRef.current
+        const numInputs = form.querySelectorAll('input[type="number"], select')
+        const payload: Record<string, unknown> = {
+          operator_name:        (form.querySelector('[name="operator_name"]') as HTMLInputElement)?.value,
+          notes:                (form.querySelector('[name="notes"]') as HTMLTextAreaElement)?.value,
+          additional_operators: parseAdditionalOperators(extraResponsables),
+          checklist_keys:       ALL_KEYS,
+          fisicoquimicos:       buildFqEntries(false),
+          pozo:                 buildPozoEntries(false),
+        }
+        ALL_KEYS.forEach(key => { payload[`check_${key}`] = checked.has(key) })
+        numInputs.forEach(el => {
+          const input = el as HTMLInputElement | HTMLSelectElement
+          if (input.name) {
+            payload[input.name] = input.type === 'number'
+              ? (input.value !== '' ? parseFloat(input.value) : null)
+              : (input.value || null)
+          }
+        })
+        await updateLog(log.id, payload)
+        setIsEditing(false)
+        setSaveOk(true)
+        setTimeout(() => setSaveOk(false), 2500)
+      }
+    } finally {
+      // Siempre liberar el lock, incluso si hay error
+      isSavingRef.current = false
+      setSaving(false)
+    }
+  }
 
   /* ── Delete ─── */
   async function handleDelete() {
@@ -303,11 +358,18 @@ const [extraResponsables, setExtraResponsables] = useState<string[]>(() => {
 
   const numField = (name: string, val?: number | null, unit?: string) => (
     <div className="relative">
-      <input type="number" name={name} step="0.01" defaultValue={val ?? ''} readOnly={!isEditing}
+      <input
+        type="number" name={name} step="0.01"
+        defaultValue={val ?? ''}
+        readOnly={!isEditing}
         placeholder={isEditing ? '0.00' : '—'}
         className={`${fieldCls(isEditing)} ${unit ? 'pr-10' : ''}`}
       />
-      {unit && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-gray-400 font-medium pointer-events-none">{unit}</span>}
+      {unit && (
+        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-gray-400 font-medium pointer-events-none">
+          {unit}
+        </span>
+      )}
     </div>
   )
 
@@ -317,10 +379,7 @@ const [extraResponsables, setExtraResponsables] = useState<string[]>(() => {
 
       {/* ══ TOP NAV ══ */}
       <header className="topbar-blur border-b border-black/[0.06] px-4 h-16 flex items-center justify-between sticky top-0 z-30 pt-safe">
-
-        {/* Left: ← Turno + 🏠 */}
         <div className="flex items-center gap-2">
-          {/* ← vuelve a las shift cards del día */}
           <button onClick={goBack}
             className="flex items-center gap-1 text-blue-500 text-[14px] font-medium active:opacity-60 transition-opacity">
             <svg width="8" height="13" viewBox="0 0 8 13" fill="none">
@@ -328,8 +387,6 @@ const [extraResponsables, setExtraResponsables] = useState<string[]>(() => {
             </svg>
             Turno
           </button>
-
-          {/* 🏠 va al calendario */}
           <button onClick={goHome}
             className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-100 text-gray-500 active:opacity-60 transition-opacity ml-1"
             aria-label="Calendario">
@@ -340,13 +397,11 @@ const [extraResponsables, setExtraResponsables] = useState<string[]>(() => {
           </button>
         </div>
 
-        {/* Center: turno pill + reloj */}
         <div className={`flex flex-col items-center px-4 py-1 rounded-2xl ${SHIFT_BADGE[shift]}`}>
           <span className="text-[12px] font-bold leading-tight">{SHIFT_LABELS[shift]}</span>
           <span className="text-[11px] font-mono tabular-nums opacity-80">{clock}</span>
         </div>
 
-        {/* Right: acciones */}
         <div className="flex items-center gap-1.5">
           {saveOk && !isEditing && (
             <span className="text-[13px] text-green-600 font-medium animate-fade-in">Guardado ✓</span>
@@ -377,7 +432,6 @@ const [extraResponsables, setExtraResponsables] = useState<string[]>(() => {
       {/* ══ CONTENT ══ */}
       <main className="flex-1 px-4 py-4 space-y-3 max-w-lg mx-auto w-full pb-safe">
 
-        {/* Info header */}
         <div className="bg-white rounded-2xl card-shadow px-4 py-4 animate-fade-in">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
@@ -410,7 +464,11 @@ const [extraResponsables, setExtraResponsables] = useState<string[]>(() => {
                 {extraResponsables.map((r, i) => (
                   <div key={i} className="flex gap-2">
                     <input type="text" value={r} readOnly={!isEditing}
-                      onChange={e => { const n = [...extraResponsables]; n[i] = e.target.value; setExtraResponsables(n) }}
+                      onChange={e => {
+                        const n = [...extraResponsables]
+                        n[i] = e.target.value
+                        setExtraResponsables(n)
+                      }}
                       className={`${fieldCls(isEditing)} flex-1`}
                     />
                     {isEditing && (
@@ -453,7 +511,9 @@ const [extraResponsables, setExtraResponsables] = useState<string[]>(() => {
                         <div className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors ${!item.active ? 'opacity-40' : ''}`}>
                           <button type="button" onClick={() => toggleCheck(item.item_key)} disabled={!item.active}
                             className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all
-                              ${checked.has(item.item_key) && item.active ? 'bg-green-500 border-green-500' : 'border-gray-300 bg-white'}`}>
+                              ${checked.has(item.item_key) && item.active
+                                ? 'bg-green-500 border-green-500'
+                                : 'border-gray-300 bg-white'}`}>
                             {checked.has(item.item_key) && item.active && (
                               <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
                                 <polyline points="2,6 5,9 10,3" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -486,31 +546,33 @@ const [extraResponsables, setExtraResponsables] = useState<string[]>(() => {
                   </div>
                 ))}
               </div>
-              
+
               {isEditing && (
-              <div className="pt-2 space-y-2 border-t border-gray-100">
-                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pt-1">
-                  Nueva tarea — {module.toUpperCase()}
-                </p>
-                <div className="flex gap-2">
-                  <input type="text" value={newTaskLabel}
-                    onChange={e => setNewTaskLabel(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddTask())}
-                    placeholder="Descripción de la tarea…"
-                    className="flex-1 px-3.5 py-2.5 rounded-xl text-[14px] border border-gray-200 bg-gray-50 outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-50 transition-all"
-                  />
-                  <button type="button" onClick={handleAddTask} disabled={taskPending || !newTaskLabel.trim()}
-                    className="px-4 py-2.5 rounded-xl bg-blue-500 text-white text-[13px] font-semibold disabled:opacity-40 active:bg-blue-600 transition-colors">
-                    {taskPending ? '…' : 'Agregar'}
-                  </button>
+                <div className="pt-2 space-y-2 border-t border-gray-100">
+                  <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pt-1">
+                    Nueva tarea — {module.toUpperCase()}
+                  </p>
+                  <div className="flex gap-2">
+                    <input type="text" value={newTaskLabel}
+                      onChange={e => setNewTaskLabel(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddTask())}
+                      placeholder="Descripción de la tarea…"
+                      className="flex-1 px-3.5 py-2.5 rounded-xl text-[14px] border border-gray-200 bg-gray-50 outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-50 transition-all"
+                    />
+                    <button type="button" onClick={handleAddTask} disabled={taskPending || !newTaskLabel.trim()}
+                      className="px-4 py-2.5 rounded-xl bg-blue-500 text-white text-[13px] font-semibold disabled:opacity-40 active:bg-blue-600 transition-colors">
+                      {taskPending ? '…' : 'Agregar'}
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-gray-400">Las tareas se guardan para este módulo.</p>
                 </div>
-                <p className="text-[11px] text-gray-400">Las tareas se guardan para este módulo.</p>
-              </div> )}
+              )}
 
               <div className="pt-1">
                 <span className={`text-[12px] font-semibold px-3 py-1 rounded-full
                   ${checked.size === ALL_KEYS.length && ALL_KEYS.length > 0
-                    ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                    ? 'bg-green-100 text-green-700'
+                    : 'bg-gray-100 text-gray-500'}`}>
                   {checked.size} / {ALL_KEYS.length} completados
                 </span>
               </div>
@@ -522,11 +584,11 @@ const [extraResponsables, setExtraResponsables] = useState<string[]>(() => {
             <div className="grid grid-cols-2 gap-x-3 gap-y-3">
               {isHAT(module) && (
                 <>
-                  <Field label="Bomba principal">  {numField('pump_main_bar',      params?.pump_main_bar,      'Bar')}</Field>
-                  <Field label="Bomba biofiltros"> {numField('pump_biofilter_bar', params?.pump_biofilter_bar, 'Bar')}</Field>
-                  <Field label="Flujómetro de Sala">      {numField('flowmeter_room_lpm',      params?.flowmeter_room_lpm,      'L/min')}</Field>
-                  <Field label="Flujómetros Bandejas">      {numField('flowmeter_lpm',      params?.flowmeter_lpm,      'L/min')}</Field>
-                  <Field label="Buffer tank">      {numField('buffer_tank_bar',    params?.buffer_tank_bar,    'Bar')}</Field>
+                  <Field label="Bomba principal">     {numField('pump_main_bar',      params?.pump_main_bar,      'Bar')}</Field>
+                  <Field label="Bomba biofiltros">    {numField('pump_biofilter_bar', params?.pump_biofilter_bar, 'Bar')}</Field>
+                  <Field label="Flujómetro de Sala">  {numField('flowmeter_room_lpm', params?.flowmeter_room_lpm, 'L/min')}</Field>
+                  <Field label="Flujómetros Bandejas">{numField('flowmeter_lpm',      params?.flowmeter_lpm,      'L/min')}</Field>
+                  <Field label="Buffer tank">         {numField('buffer_tank_bar',    params?.buffer_tank_bar,    'Bar')}</Field>
                   <Field label="Ingreso agua" className="col-span-2">
                     {numField('water_intake', params?.water_intake, 'dientes')}
                   </Field>
@@ -572,7 +634,9 @@ const [extraResponsables, setExtraResponsables] = useState<string[]>(() => {
                 {(['A', 'B'] as const).map(tab => (
                   <button key={tab} type="button" onClick={() => setActiveSlot(tab)}
                     className={`flex-1 py-2 rounded-xl text-[13px] font-semibold transition-colors
-                      ${activeSlot === tab ? 'bg-blue-500 text-white shadow-sm shadow-blue-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
+                      ${activeSlot === tab
+                        ? 'bg-blue-500 text-white shadow-sm shadow-blue-200'
+                        : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
                     {tab === 'A' ? slotA : slotB}
                   </button>
                 ))}
@@ -582,8 +646,12 @@ const [extraResponsables, setExtraResponsables] = useState<string[]>(() => {
                   <div className="relative">
                     <input type="number" step="0.01"
                       value={activeSlot === 'A' ? tempSlotA : tempSlotB}
-                      onChange={e => activeSlot === 'A' ? setTempSlotA(e.target.value) : setTempSlotB(e.target.value)}
-                      readOnly={!isEditing} placeholder={isEditing ? '0.00' : '—'}
+                      onChange={e => activeSlot === 'A'
+                        ? setTempSlotA(e.target.value)
+                        : setTempSlotB(e.target.value)
+                      }
+                      readOnly={!isEditing}
+                      placeholder={isEditing ? '0.00' : '—'}
                       className={`${fieldCls(isEditing)} pr-10`}
                     />
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-gray-400 font-medium pointer-events-none">°C</span>
@@ -609,7 +677,8 @@ const [extraResponsables, setExtraResponsables] = useState<string[]>(() => {
                               value={fqData[id]?.[currentSlot]?.[field] ?? ''}
                               onChange={e => setFQ(id, currentSlot, field, e.target.value)}
                               readOnly={!isEditing}
-                              className="fq-input w-full text-center" placeholder="—"
+                              className="fq-input w-full text-center"
+                              placeholder="—"
                             />
                           </td>
                         ))}
@@ -628,7 +697,9 @@ const [extraResponsables, setExtraResponsables] = useState<string[]>(() => {
                 {(['A', 'B'] as const).map(tab => (
                   <button key={tab} type="button" onClick={() => setActiveSlot(tab)}
                     className={`flex-1 py-2 rounded-xl text-[13px] font-semibold transition-colors
-                      ${activeSlot === tab ? 'bg-indigo-500 text-white shadow-sm' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
+                      ${activeSlot === tab
+                        ? 'bg-indigo-500 text-white shadow-sm'
+                        : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
                     {tab === 'A' ? slotA : slotB}
                   </button>
                 ))}
@@ -677,6 +748,13 @@ const [extraResponsables, setExtraResponsables] = useState<string[]>(() => {
             />
           </Card>
 
+           {isEditing && (
+            <button onClick={handleSave} disabled={saving}
+              className="w-full py-3.5 bg-blue-500 text-white text-[15px] font-semibold rounded-full shadow-sm shadow-blue-200 active:bg-blue-600 transition-colors disabled:opacity-50">
+              {saving ? 'Guardando…' : 'Guardar'}
+            </button>
+          )}
+          <br></br>
         </form>
       </main>
 

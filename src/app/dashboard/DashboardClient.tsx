@@ -8,6 +8,7 @@ import type { Shift, Profile } from '@/types'
 import { SHIFT_LABELS, SHIFT_TIMES } from '@/types'
 import { logout } from '@/app/auth/actions'
 import { getLogsForMonth } from './actions'
+import { LogOut as Salir} from 'lucide-react';
 
 const MONTHS = [
   'Enero','Febrero','Marzo','Abril','Mayo','Junio',
@@ -129,9 +130,16 @@ export default function DashboardClient({ profile, dbModules }: Props) {
           </div>
           <div className="text-left leading-tight">
             <div className="text-[14px] font-semibold text-gray-900">{selectedModule.name}</div>
-            <div className="text-[11px] text-gray-400 tabular-nums">{clock}</div>
           </div>
         </button>
+
+        {/* Centro: fecha + hora */}
+        <div className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center leading-tight">
+          <span className="text-[13px] font-semibold text-gray-900 tabular-nums">
+            {new Date().toLocaleDateString('es-CL', { weekday: 'short', day: 'numeric', month: 'short' })}
+          </span>
+          <span className="text-[11px] text-gray-400 tabular-nums font-mono">{clock}</span>
+        </div>
 
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 text-[12px] font-bold">
@@ -139,7 +147,7 @@ export default function DashboardClient({ profile, dbModules }: Props) {
           </div>
           <form action={logout}>
             <button type="submit" className="text-[13px] text-gray-400 font-medium px-1 py-1 active:text-gray-700 transition-colors">
-              Salir
+                <Salir size={16} color='red' />
             </button>
           </form>
         </div>

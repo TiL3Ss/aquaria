@@ -141,35 +141,44 @@ export async function createLog(data: Record<string, unknown>) {
     )
   }
 
-  // Fisicoquímicos
+  // Fisicoquímicos — solo filas con al menos un valor real
   const fqEntries = data.fisicoquimicos as Record<string, unknown>[]
   if (fqEntries?.length > 0) {
-    await supabase.from('fisicoquimicos').insert(
-      fqEntries.map(e => ({ log_id: log.id, ...e }))
+    const nonEmptyFq = fqEntries.filter(e =>
+      e.o2_saturation !== null || e.dissolved_o2 !== null || e.temperature !== null
     )
+    if (nonEmptyFq.length > 0) {
+      const { error: fqError } = await supabase.from('fisicoquimicos').insert(
+        nonEmptyFq.map(e => ({ log_id: log.id, ...e }))
+      )
+      if (fqError) console.error('[createLog] Error insertando fisicoquímicos:', fqError.message, fqError.code)
+    }
   }
 
-  // Pozo
+  // Pozo — solo filas con al menos un valor real
   const pozoEntries = data.pozo as Record<string, unknown>[]
   if (pozoEntries?.length > 0) {
-    await supabase.from('pozo_readings').insert(
-      pozoEntries.map(e => ({ log_id: log.id, ...e }))
+    const nonEmptyPozo = pozoEntries.filter(e =>
+      e.temperature !== null || e.o2_saturation !== null || e.dissolved_o2 !== null
     )
+    if (nonEmptyPozo.length > 0) {
+      const { error: pozoError } = await supabase.from('pozo_readings').insert(
+        nonEmptyPozo.map(e => ({ log_id: log.id, ...e }))
+      )
+      if (pozoError) console.error('[createLog] Error insertando pozo:', pozoError.message, pozoError.code)
+    }
   }
 
-  revalidatePath('/dashboard')
-  redirect('/dashboard')
+  revalidatePath(`/dashboard?module=${moduleSlug}`)
+  redirect(`/dashboard?module=${moduleSlug}`)
 }
-
-
-
 
 export async function updateLog(logId: string, data: Record<string, unknown>) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'No autenticado' }
 
-  const { error: logError } = await supabase.from('logs')
+  await supabase.from('logs')
     .update({
       operator_name:        data.operator_name as string,
       notes:                (data.notes as string) || null,
@@ -177,9 +186,7 @@ export async function updateLog(logId: string, data: Record<string, unknown>) {
     })
     .eq('id', logId).eq('user_id', user.id)
 
-  console.log('logError:', logError)
-
-  const { error: paramsError } = await supabase.from('log_parameters')
+  await supabase.from('log_parameters')
     .update({
       pump_main_bar:      data.pump_main_bar      as number | null,
       pump_biofilter_bar: data.pump_biofilter_bar as number | null,
@@ -204,8 +211,7 @@ export async function updateLog(logId: string, data: Record<string, unknown>) {
     })
     .eq('log_id', logId)
 
-  console.log('paramsError:', paramsError)
-
+  // Checklist
   const checklistKeys = data.checklist_keys as string[]
   if (checklistKeys?.length > 0) {
     await supabase.from('checklist_responses').upsert(
@@ -218,22 +224,24 @@ export async function updateLog(logId: string, data: Record<string, unknown>) {
     )
   }
 
+  // Fisicoquímicos — upsert completo, null borra valores anteriores
   const fqEntries = data.fisicoquimicos as Record<string, unknown>[]
-  console.log('fqEntries en updateLog:', fqEntries)
-  console.log('fqEntries length:', fqEntries?.length)
   if (fqEntries?.length > 0) {
-    await supabase.from('fisicoquimicos').upsert(
+    const { error: fqError } = await supabase.from('fisicoquimicos').upsert(
       fqEntries.map(e => ({ log_id: logId, ...e })),
       { onConflict: 'log_id,identifier,time_slot' }
     )
+    if (fqError) console.error('[updateLog] Error en upsert fisicoquímicos:', fqError.message, fqError.code)
   }
 
+  // Pozo — upsert completo
   const pozoEntries = data.pozo as Record<string, unknown>[]
   if (pozoEntries?.length > 0) {
-    await supabase.from('pozo_readings').upsert(
+    const { error: pozoError } = await supabase.from('pozo_readings').upsert(
       pozoEntries.map(e => ({ log_id: logId, ...e })),
       { onConflict: 'log_id,time_slot' }
     )
+    if (pozoError) console.error('[updateLog] Error en upsert pozo:', pozoError.message, pozoError.code)
   }
 
   revalidatePath('/bitacora')
@@ -337,26 +345,21 @@ export async function deleteChecklistConfigItem(id: string): Promise<{ error?: s
 ───────────────────────────────────────────────────────── */
 
 function buildParameters(formData: FormData) {
-  
   return {
-    // HAT
     pump_main_bar:      parseNum(formData.get('pump_main_bar')),
     pump_biofilter_bar: parseNum(formData.get('pump_biofilter_bar')),
     flowmeter_lpm:      parseNum(formData.get('flowmeter_lpm')),
     flowmeter_room_lpm: parseNum(formData.get('flowmeter_room_lpm')),
     buffer_tank_bar:    parseNum(formData.get('buffer_tank_bar')),
     water_intake:       parseNum(formData.get('water_intake')),
-    // FF
     ozone_pct:          parseNum(formData.get('ozone_pct')),
     intake_value:       parseNum(formData.get('intake_value')),
     osmosis_value:      (formData.get('osmosis_value') as string) || null,
     ph_ff:              parseNum(formData.get('ph_ff')),
     salinity_ff:        parseNum(formData.get('salinity_ff')),
     orp_ff:             parseNum(formData.get('orp_ff')),
-    // Químicos
     bicarbonate_kg:     parseNum(formData.get('bicarbonate_kg')),
     chloride_kg:        parseNum(formData.get('chloride_kg')),
-    // Legacy
     well_level:         (formData.get('well_level')   as string) || null,
     chemical_b_kg:      parseNum(formData.get('chemical_b_kg')),
     chemical_cc:        parseNum(formData.get('chemical_cc')),
@@ -364,35 +367,6 @@ function buildParameters(formData: FormData) {
     feeding_type:       (formData.get('feeding_type') as string) || null,
     feeding_amount:     parseNum(formData.get('feeding_amount')),
   }
-}
-
-  
-
-async function insertParameters(supabase: Awaited<ReturnType<typeof createClient>>, logId: string, formData: FormData) {
-  await supabase.from('log_parameters').insert({ log_id: logId, ...buildParameters(formData) })
-}
-
-
-
-async function insertChecklist(supabase: Awaited<ReturnType<typeof createClient>>, logId: string, formData: FormData) {
-  const keys = formData.getAll('checklist_keys') as string[]
-  if (!keys.length) return
-  await supabase.from('checklist_responses').insert(
-    keys.map(key => ({ log_id: logId, item_key: key, checked: formData.get(`check_${key}`) === 'true' }))
-  )
-}
-
-
-async function insertFisicoquimicos(supabase: Awaited<ReturnType<typeof createClient>>, logId: string, formData: FormData) {
-  const entries = JSON.parse(formData.get('fisicoquimicos') as string || '[]')
-  if (!entries.length) return
-  await supabase.from('fisicoquimicos').insert(entries.map((e: Record<string, unknown>) => ({ log_id: logId, ...e })))
-}
-
-async function insertPozo(supabase: Awaited<ReturnType<typeof createClient>>, logId: string, formData: FormData) {
-  const entries = JSON.parse(formData.get('pozo') as string || '[]')
-  if (!entries.length) return
-  await supabase.from('pozo_readings').insert(entries.map((e: Record<string, unknown>) => ({ log_id: logId, ...e })))
 }
 
 function parseNum(val: FormDataEntryValue | null): number | null {
