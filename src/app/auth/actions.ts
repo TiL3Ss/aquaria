@@ -78,3 +78,15 @@ export async function logout() {
   revalidatePath('/', 'layout')
   redirect('/auth/login')
 }
+
+//Block de código para verificar el código de acceso en AccessCodeGate
+export async function verifyAccessCode(code: string): Promise<{ ok: boolean }> {
+  const expected = process.env.REGISTER_ACCESS_CODE
+  if (!expected) {
+    console.error('[verifyAccessCode] REGISTER_ACCESS_CODE no está definido en .env')
+    return { ok: false }
+  }
+  // Comparación sin timing attack
+  const clean = code.replace(/\D/g, '')
+  return { ok: clean === expected }
+}

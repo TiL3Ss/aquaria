@@ -2,6 +2,7 @@
 
 import { register as registerAction } from '../actions'
 import RutInput from '@/components/ui/RutInput'
+import AccessCodeGate from '@/components/ui/AccessCodeGate'
 import Link from 'next/link'
 import { AlertCircle, UserPlus, ChevronLeft } from 'lucide-react'
 
@@ -13,11 +14,13 @@ export default async function RegisterPage({ searchParams }: Props) {
   const params = await searchParams
 
   return (
+    <AccessCodeGate>
     <div className="min-h-dvh flex items-center justify-center px-4 bg-[#f2f2f7]">
 
       <div className="w-full max-w-md">
 
         {/* Header */}
+        <br></br>
         <div className="text-center mb-8">
           <div className="mx-auto mb-4 w-[76px] h-[76px] rounded-[22px] flex items-center justify-center bg-black/90">
             <UserPlus size={30} className="text-white" />
@@ -120,8 +123,9 @@ export default async function RegisterPage({ searchParams }: Props) {
             Volver a iniciar sesión
           </Link>
         </p>
-
+        <br></br>
       </div>
     </div>
+    </AccessCodeGate>
   )
 }
