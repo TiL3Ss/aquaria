@@ -4,6 +4,11 @@ import './globals.css'
 export const metadata: Metadata = {
   title: { default: 'Aquaria', template: '%s — Aquaria' },
   description: 'Sistema de bitácoras operativas',
+  icons: {
+    icon: '/favicon.ico',
+    shortcut: '/favicon.ico',
+    apple: '/icon.png',
+  },
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
@@ -42,3 +47,4 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     </html>
   )
 }
+

@@ -2,7 +2,9 @@
 
 import { login } from '../actions'
 import RutInput from '@/components/ui/RutInput'
-import { Lock, AlertCircle, CheckCircle2 } from 'lucide-react'
+import Image from "next/image"
+import libro from "@/IMG/librob.png"
+import { AlertCircle, CheckCircle2 } from 'lucide-react'
 
 interface Props {
   searchParams: Promise<{ error?: string; success?: string }>
@@ -20,8 +22,14 @@ export default async function LoginPage({ searchParams }: Props) {
 
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="mx-auto mb-4 w-[76px] h-[76px] rounded-[22px] flex items-center justify-center bg-black/90">
-            <Lock size={30} className="text-white" />
+          <div className="mx-auto mb-4 w-[76px] h-[76px] rounded-[22px] flex items-center justify-center bg-black/90 overflow-hidden">
+            <Image
+              src={libro}
+              alt="Icono"
+              width={40}
+              height={40}
+              className="object-contain"
+            />
           </div>
 
           <h1 className="text-3xl font-semibold tracking-tight text-black">
