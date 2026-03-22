@@ -87,7 +87,7 @@ export function generateBitacoraPdf(
     paramPairs = [
       ['Ozono',     fmt(p?.ozone_pct,   '%')],
       ['Intake',    fmt(p?.intake_value)],
-      ['Osmosis',   p?.osmosis_value ?? '—'],
+      ['Osmosis', String(p?.osmosis_value ?? '—')],
       ['pH',        fmt(p?.ph_ff)],
       ['Salinidad', fmt(p?.salinity_ff, 'ppt')],
       ['ORP',       fmt(p?.orp_ff,      'mV')],
