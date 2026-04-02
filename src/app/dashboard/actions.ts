@@ -19,7 +19,8 @@ export async function getLogsForMonth(
 ): Promise<Record<string, Record<Shift, boolean>>> {
   const supabase = await createClient()
   const startDate = `${year}-${String(month).padStart(2, '0')}-01`
-  const endDate   = `${year}-${String(month).padStart(2, '0')}-31`
+  const lastDay = new Date(year, month, 0).getDate()
+  const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
 
   const { data: module } = await supabase
     .from('modules').select('id').eq('slug', moduleSlug.toLowerCase()).single()
