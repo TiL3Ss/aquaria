@@ -379,67 +379,104 @@ export default function BitacoraClient({
     <div className="min-h-dvh bg-[#F2F2F7] flex flex-col">
 
       {/* ══ TOP NAV ══ */}
-      <header className="topbar-blur border-b border-black/[0.06] px-4 h-16 flex items-center justify-between sticky top-0 z-30 pt-safe">
-        <div className="flex items-center gap-2">
-          <button onClick={goBack}
-            className="flex items-center gap-1 text-blue-500 text-[14px] font-medium active:opacity-60 transition-opacity">
-            <svg width="8" height="13" viewBox="0 0 8 13" fill="none">
-              <path d="M7 1L1 6.5L7 12" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            Turno
-          </button>
-          <button onClick={goHome}
-            className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-100 text-gray-500 active:opacity-60 transition-opacity ml-1"
-            aria-label="Calendario">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z"/>
-              <path d="M9 21V12h6v9"/>
-            </svg>
-          </button>
-        </div>
+<header className="topbar-blur border-b border-black/[0.06] px-3 h-14 flex items-center justify-between sticky top-0 z-30 pt-safe">
+  
+  {/* ── Izquierda: Volver + Home ── */}
+  <div className="flex items-center gap-1.5 min-w-0">
+    <button onClick={goBack}
+      className="flex items-center gap-1 text-blue-500 text-[14px] font-medium active:opacity-60 transition-opacity shrink-0">
+      <svg width="8" height="13" viewBox="0 0 8 13" fill="none">
+        <path d="M7 1L1 6.5L7 12" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+      <span>Turno</span>
+    </button>
+    <button onClick={goHome}
+      className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-100 text-gray-500 active:opacity-60 transition-opacity shrink-0"
+      aria-label="Inicio">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z"/>
+        <path d="M9 21V12h6v9"/>
+      </svg>
+    </button>
+  </div>
 
-        <div className={`flex flex-col items-center px-4 py-1 rounded-2xl ${SHIFT_BADGE[shift]}`}>
-          <span className="text-[12px] font-bold leading-tight">{SHIFT_LABELS[shift]}</span>
-          <span className="text-[11px] font-mono tabular-nums opacity-80">{clock}</span>
-        </div>
+  {/* ── Centro: Badge de turno ── */}
+  <div className={`flex flex-col items-center px-3 py-1 rounded-2xl shrink-0 ${SHIFT_BADGE[shift]}`}>
+    <span className="text-[11px] font-bold leading-tight">{SHIFT_LABELS[shift]}</span>
+    <span className="text-[10px] font-mono tabular-nums opacity-80">{clock}</span>
+  </div>
 
-        <div className="flex items-center gap-1.5">
-          {saveOk && !isEditing && (
-            <span className="text-[13px] text-green-600 font-medium animate-fade-in">Guardado ✓</span>
-          )}
-          {!isEditing && mode !== 'create' && (
-            <>
-              <button
-                onClick={() => logFull && generateBitacoraPdf(logFull, module, date, shift, config)}
-                className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-100 text-gray-500 active:opacity-60 transition-opacity"
-                aria-label="Descargar PDF"
-                title="Descargar PDF">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-                  <polyline points="7 10 12 15 17 10"/>
-                  <line x1="12" y1="15" x2="12" y2="3"/>
-                </svg>
-              </button>
-              <button onClick={() => setIsEditing(true)}
-                className="text-blue-500 text-[14px] font-semibold px-2 py-1 active:opacity-60">Editar</button>
-              <button onClick={() => setShowDelete(true)}
-                className="text-red-500 text-[14px] font-semibold px-2 py-1 active:opacity-60">Eliminar</button>
-            </>
-          )}
-          {isEditing && (
-            <>
-              {mode !== 'create' && (
-                <button onClick={() => setIsEditing(false)}
-                  className="text-gray-500 text-[14px] px-2 py-1 active:opacity-60">Cancelar</button>
-              )}
-              <button onClick={handleSave} disabled={saving}
-                className="bg-blue-500 text-white text-[13px] font-semibold px-4 py-1.5 rounded-full shadow-sm shadow-blue-200 active:bg-blue-600 transition-colors disabled:opacity-50">
-                {saving ? 'Guardando…' : 'Guardar'}
-              </button>
-            </>
-          )}
-        </div>
-      </header>
+  {/* ── Derecha: Acciones ── */}
+  <div className="flex items-center gap-1.5 min-w-0">
+    
+    {/* Guardado OK */}
+    {saveOk && !isEditing && (
+      <span className="text-[12px] text-green-600 font-semibold animate-fade-in shrink-0">✓</span>
+    )}
+
+    {/* Modo vista */}
+    {!isEditing && mode !== 'create' && (
+      <>
+        {/* PDF */}
+        <button
+          onClick={() => logFull && generateBitacoraPdf(logFull, module, date, shift, config)}
+          className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-100 text-gray-500 active:opacity-60 transition-opacity"
+          aria-label="Descargar PDF">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+        </button>
+
+        {/* Editar → ícono lápiz */}
+        <button onClick={() => setIsEditing(true)}
+          className="w-8 h-8 flex items-center justify-center rounded-xl bg-blue-50 text-blue-500 active:opacity-60 transition-opacity"
+          aria-label="Editar">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+            <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+          </svg>
+        </button>
+
+        {/* Eliminar → ícono basura */}
+        <button onClick={() => setShowDelete(true)}
+          className="w-8 h-8 flex items-center justify-center rounded-xl bg-red-50 text-red-400 active:opacity-60 transition-opacity"
+          aria-label="Eliminar">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6l-1 14H6L5 6"/>
+            <path d="M10 11v6"/><path d="M14 11v6"/>
+            <path d="M9 6V4h6v2"/>
+          </svg>
+        </button>
+      </>
+    )}
+
+    {/* Modo edición */}
+    {isEditing && (
+      <>
+        {/* Cancelar → ícono X */}
+        {mode !== 'create' && (
+          <button onClick={() => setIsEditing(false)}
+            className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-100 text-gray-500 active:opacity-60 transition-opacity"
+            aria-label="Cancelar">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        )}
+
+        {/* Guardar → texto corto con pill */}
+        <button onClick={handleSave} disabled={saving}
+          className="bg-blue-500 text-white text-[13px] font-semibold px-3.5 py-1.5 rounded-full shadow-sm shadow-blue-200 active:bg-blue-600 transition-colors disabled:opacity-50 shrink-0">
+          {saving ? '…' : 'Guardar'}
+        </button>
+      </>
+    )}
+  </div>
+</header>
 
       {/* ══ CONTENT ══ */}
       <main className="flex-1 px-4 py-4 space-y-3 max-w-lg mx-auto w-full pb-safe">
