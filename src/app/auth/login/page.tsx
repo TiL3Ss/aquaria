@@ -115,7 +115,9 @@ export default async function LoginPage({ searchParams }: Props) {
 
         {/* Footer */}
         <p className="text-center text-sm text-gray-500 mt-6">
-         
+          <Link href="/auth/forgot-password" className="text-black font-medium hover:underline">
+            ¿Olvidaste tu contraseña?
+          </Link>
         </p>
 
       </div>
