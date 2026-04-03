@@ -90,3 +90,56 @@ export async function verifyAccessCode(code: string): Promise<{ ok: boolean }> {
   const clean = code.replace(/\D/g, '')
   return { ok: clean === expected }
 }
+
+// Reset password flow
+
+export async function forgotPassword(formData: FormData) {
+  const supabase = await createClient()
+
+  const rut = formData.get('rut') as string
+  const cleanedRut = cleanRut(rut)
+
+  if (!validateRut(cleanedRut)) {
+    redirect('/auth/forgot-password?error=RUT+inválido')
+  }
+
+  const { data: email } = await supabase
+    .rpc('get_email_by_rut', { p_rut: cleanedRut })
+
+  if (!email) {
+    redirect('/auth/forgot-password?error=RUT+no+registrado+en+el+sistema')
+  }
+
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/reset-password`,
+  })
+
+  if (error) {
+    redirect(`/auth/forgot-password?error=${encodeURIComponent(error.message)}`)
+  }
+
+  redirect('/auth/forgot-password?success=Revisa+tu+correo+para+restablecer+tu+contraseña')
+}
+
+export async function resetPassword(formData: FormData) {
+  const supabase = await createClient()
+
+  const password = formData.get('password') as string
+  const confirm = formData.get('confirm') as string
+
+  if (password.length < 8) {
+    redirect('/auth/reset-password?error=Contraseña+mínimo+8+caracteres')
+  }
+
+  if (password !== confirm) {
+    redirect('/auth/reset-password?error=Las+contraseñas+no+coinciden')
+  }
+
+  const { error } = await supabase.auth.updateUser({ password })
+
+  if (error) {
+    redirect(`/auth/reset-password?error=${encodeURIComponent(error.message)}`)
+  }
+
+  redirect('/auth/login?success=Contraseña+actualizada+exitosamente')
+}
