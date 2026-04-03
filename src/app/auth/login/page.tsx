@@ -5,7 +5,7 @@ import RutInput from '@/components/ui/RutInput'
 import Image from "next/image"
 import libro from "@/IMG/librob.png"
 import { AlertCircle, CheckCircle2 } from 'lucide-react'
-
+import Link from 'next/link'
 interface Props {
   searchParams: Promise<{ error?: string; success?: string }>
 }
