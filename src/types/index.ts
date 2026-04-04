@@ -117,6 +117,7 @@ export interface FryNumericParam {
   salinity:    number | null
   ozone_pct:   number | null
   orp:         number | null
+  time_taken:  string | null
 }
 
 /** Presión manómetro O₂ — un valor por slot A/B, compartido por todos los TKs */

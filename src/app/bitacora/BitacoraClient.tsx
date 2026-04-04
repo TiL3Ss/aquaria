@@ -22,6 +22,7 @@ import {
 } from '@/app/dashboard/actions'
 import type { ChecklistConfigItem } from '@/app/dashboard/actions'
 import { generateBitacoraPdf } from '@/lib/generateBitacoraPdf'
+import { time } from 'console'
 
 /* ── Types ─────────────────────────────────────────── */
 interface Props {
@@ -46,6 +47,7 @@ type FryNumericSlotCell = {
   salinity?:    number
   ozone_pct?:   number
   orp?:         number
+  time_taken?: string
 }
 type FryNumericState = Record<number, FryNumericSlotCell> // key: 1–5
 
@@ -220,7 +222,9 @@ export default function BitacoraClient({
         salinity:    toNum(found.salinity),
         ozone_pct:   toNum(found.ozone_pct),
         orp:         toNum(found.orp),
-      } : {}
+        time_taken:  found.time_taken ?? undefined,
+        
+        } : {}
     })
     return map
   })
@@ -410,8 +414,9 @@ export default function BitacoraClient({
         salinity:    cell.salinity    ?? null,
         ozone_pct:   cell.ozone_pct   ?? null,
         orp:         cell.orp         ?? null,
+        time_taken:   cell.time_taken   ?? null,
       }
-      if (filterEmpty && !hasAnyValue(entry, ['temperature','ph','salinity','ozone_pct','orp'])) return []
+      if (filterEmpty && !hasAnyValue(entry, ['temperature','ph','salinity','ozone_pct','orp', 'time_taken'])) return []
       return [entry]
     })
   }
@@ -783,18 +788,63 @@ export default function BitacoraClient({
               /* FRY: 5 slots de toma de parámetros */
               <div>
                 <p className="text-[12px] text-gray-400 mb-3">Hasta 5 tomas por turno. Puedes dejar slots sin completar.</p>
-                {/* Tabs 1–5 */}
+                {/* Tabs 1–5 — muestran la hora si ya tiene valor */}
                 <div className="flex gap-1.5 mb-4">
                   {FRY_NUMERIC_SLOTS.map(n => (
                     <button key={n} type="button" onClick={() => setActiveFrySlot(n)}
-                      className={`flex-1 py-2 rounded-xl text-[13px] font-bold transition-colors
+                      className={`flex-1 py-2 rounded-xl text-[13px] font-bold transition-colors flex flex-col items-center leading-tight
                         ${activeFrySlot === n
                           ? 'bg-blue-500 text-white shadow-sm shadow-blue-200'
                           : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
-                      {n}
+                      <span>{n}</span>
+                      {fryNumeric[n]?.time_taken && (
+                        <span className={`text-[9px] font-mono mt-0.5 ${activeFrySlot === n ? 'opacity-80' : 'opacity-60'}`}>
+                          {fryNumeric[n].time_taken}
+                        </span>
+                      )}
                     </button>
                   ))}
                 </div>
+ 
+                {/* Hora de toma */}
+                <div className="mb-4">
+                  <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-0.5 block mb-1">
+                    Hora de toma — slot {activeFrySlot}
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="time"
+                      value={fryNumeric[activeFrySlot]?.time_taken ?? ''}
+                      onChange={e => setFryNumeric(prev => ({
+                        ...prev,
+                        [activeFrySlot]: { ...prev[activeFrySlot], time_taken: e.target.value },
+                      }))}
+                      readOnly={!isEditing}
+                      className={`flex-1 px-3.5 py-3 rounded-xl text-[14px] border outline-none transition-all font-mono
+                        ${isEditing
+                          ? 'bg-white border-gray-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-50 text-gray-900'
+                          : 'bg-gray-50 border-transparent text-gray-700 cursor-default'}`}
+                    />
+                    {isEditing && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const now = new Date().toLocaleTimeString('es-CL', {
+                            hour: '2-digit', minute: '2-digit', hour12: false,
+                          })
+                          setFryNumeric(prev => ({
+                            ...prev,
+                            [activeFrySlot]: { ...prev[activeFrySlot], time_taken: now },
+                          }))
+                        }}
+                        className="px-3.5 py-3 rounded-xl bg-blue-50 text-blue-500 text-[12px] font-semibold whitespace-nowrap active:bg-blue-100 transition-colors border border-blue-100"
+                        title="Usar hora actual">
+                        Ahora
+                      </button>
+                    )}
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-2 gap-x-3 gap-y-3">
                   {([ 
                     { field: 'temperature' as const, label: 'Temperatura',  unit: '°C'  },
