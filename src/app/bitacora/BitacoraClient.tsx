@@ -18,7 +18,7 @@ import {
 import {
   updateLog, deleteLog, createLog,
   addChecklistConfigItem, updateChecklistConfigItem,
-  toggleChecklistConfigItem, deleteChecklistConfigItem,
+  toggleChecklistConfigItem, deleteChecklistConfigItem, reorderChecklistConfig,
 } from '@/app/dashboard/actions'
 import type { ChecklistConfigItem } from '@/app/dashboard/actions'
 import { generateBitacoraPdf } from '@/lib/generateBitacoraPdf'
@@ -162,6 +162,72 @@ export default function BitacoraClient({
   const [newTaskLabel, setNewTaskLabel] = useState('')
   const [editingItem,  setEditingItem]  = useState<{ id: string; label: string } | null>(null)
   const [taskPending,  setTaskPending]  = useState(false)
+
+  /* ── Checklist order ── */
+
+  const [draggedId,   setDraggedId]   = useState<string | null>(null)
+  const [dragOverId,  setDragOverId]  = useState<string | null>(null)
+ 
+  function handleDragStart(id: string) {
+    setDraggedId(id)
+  }
+ 
+  function handleDragOver(e: React.DragEvent, id: string) {
+    e.preventDefault()
+    if (id !== draggedId) setDragOverId(id)
+  }
+ 
+  function handleDragLeave() {
+    setDragOverId(null)
+  }
+ 
+  async function handleDrop(targetId: string) {
+    setDragOverId(null)
+    if (!draggedId || draggedId === targetId) { setDraggedId(null); return }
+ 
+    // Reordenar localmente
+    const oldIndex = config.findIndex(i => i.id === draggedId)
+    const newIndex = config.findIndex(i => i.id === targetId)
+    if (oldIndex === -1 || newIndex === -1) { setDraggedId(null); return }
+ 
+    const reordered = [...config]
+    const [moved] = reordered.splice(oldIndex, 1)
+    reordered.splice(newIndex, 0, moved)
+ 
+    setConfig(reordered)
+    setDraggedId(null)
+ 
+    // Persistir en BD
+    await reorderChecklistConfig(reordered.map(i => i.id))
+  }
+ 
+  function handleDragEnd() {
+    setDraggedId(null)
+    setDragOverId(null)
+  }
+ 
+  // Touch drag state
+  const touchDragId    = useRef<string | null>(null)
+  const touchStartY    = useRef<number>(0)
+ 
+  function handleTouchStart(e: React.TouchEvent, id: string) {
+    if (!isEditing) return
+    touchDragId.current = id
+    touchStartY.current = e.touches[0].clientY
+  }
+ 
+  function handleTouchEnd(e: React.TouchEvent) {
+    if (!touchDragId.current) return
+    const touch     = e.changedTouches[0]
+    const el        = document.elementFromPoint(touch.clientX, touch.clientY)
+    const targetRow = el?.closest('[data-checklist-id]') as HTMLElement | null
+    const targetId  = targetRow?.dataset.checklistId
+ 
+    if (targetId && targetId !== touchDragId.current) {
+      handleDrop(targetId)
+    }
+    touchDragId.current = null
+  }
 
   const activeItems = config.filter(i => i.active)
   const ALL_KEYS    = activeItems.map(i => i.item_key)
@@ -707,8 +773,38 @@ export default function BitacoraClient({
             <div className="space-y-2">
               <div className="space-y-1.5">
                 {config.map(item => (
-                  <div key={item.id} className="flex items-center gap-2">
-                    <div className="flex-1">
+                  <div
+                    key={item.id}
+                    data-checklist-id={item.id}
+                    draggable={isEditing && !editingItem}
+                    onDragStart={() => handleDragStart(item.id)}
+                    onDragOver={e => handleDragOver(e, item.id)}
+                    onDragLeave={handleDragLeave}
+                    onDrop={() => handleDrop(item.id)}
+                    onDragEnd={handleDragEnd}
+                    onTouchStart={e => handleTouchStart(e, item.id)}
+                    onTouchEnd={handleTouchEnd}
+                    className={`flex items-center gap-2 rounded-xl transition-all
+                      ${dragOverId === item.id ? 'ring-2 ring-blue-300 bg-blue-50/50' : ''}
+                      ${draggedId  === item.id ? 'opacity-40 scale-[0.98]'           : ''}`}
+                  >
+                    {/* Handle de arrastre — solo visible en modo edición */}
+                    {isEditing && !editingItem && (
+                      <div
+                        className="flex-shrink-0 cursor-grab active:cursor-grabbing px-1 py-3 text-gray-300 hover:text-gray-400 transition-colors touch-none select-none"
+                        title="Arrastrar para reordenar">
+                        <svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor">
+                          <circle cx="4" cy="3"  r="1.5"/>
+                          <circle cx="8" cy="3"  r="1.5"/>
+                          <circle cx="4" cy="8"  r="1.5"/>
+                          <circle cx="8" cy="8"  r="1.5"/>
+                          <circle cx="4" cy="13" r="1.5"/>
+                          <circle cx="8" cy="13" r="1.5"/>
+                        </svg>
+                      </div>
+                    )}
+ 
+                    <div className="flex-1 min-w-0">
                       {editingItem?.id === item.id ? (
                         <div className="flex gap-2">
                           <input type="text" value={editingItem.label}
@@ -731,13 +827,14 @@ export default function BitacoraClient({
                               </svg>
                             )}
                           </button>
-                          <span className={`text-[14px] font-medium leading-tight flex-1
+                          <span className={`text-[14px] font-medium leading-tight flex-1 truncate
                             ${checked.has(item.item_key) && item.active ? 'text-green-800' : 'text-gray-600'}`}>
                             {item.label}
                           </span>
                         </div>
                       )}
                     </div>
+ 
                     {isEditing && !editingItem && (
                       <div className="flex gap-1 flex-shrink-0">
                         <button type="button" onClick={() => setEditingItem({ id: item.id, label: item.label })}
@@ -753,6 +850,11 @@ export default function BitacoraClient({
                   </div>
                 ))}
               </div>
+              {isEditing && !editingItem && config.length > 1 && (
+                <p className="text-[10px] text-gray-400 text-center py-1">
+                  ☰ Arrastra para reordenar
+                </p>
+              )}
               {isEditing && (
                 <div className="pt-2 space-y-2 border-t border-gray-100">
                   <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pt-1">

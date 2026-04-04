@@ -403,6 +403,7 @@ export type ChecklistConfigItem = {
   label:      string
   is_default: boolean
   active:     boolean
+  sort_order: number | null
 }
 
 export async function getChecklistConfig(moduleSlug: string): Promise<ChecklistConfigItem[]> {
@@ -412,7 +413,7 @@ export async function getChecklistConfig(moduleSlug: string): Promise<ChecklistC
     .from('checklist_module_config')
     .select('*')
     .eq('module_slug', moduleSlug)
-    .order('created_at', { ascending: true })
+    .order('created_at', { ascending: true, nullsFirst: true })
 
   if (existing && existing.length > 0) return existing
 
@@ -469,6 +470,22 @@ export async function deleteChecklistConfigItem(id: string): Promise<{ error?: s
   const supabase = await createClient()
   const { error } = await supabase.from('checklist_module_config').delete().eq('id', id)
   if (error) return { error: error.message }
+  revalidatePath('/bitacora')
+  return {}
+}
+
+export async function reorderChecklistConfig(
+  orderedIds: string[]
+): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  // Upsert de cada item con su nuevo sort_order
+  const updates = orderedIds.map((id, index) =>
+    supabase
+      .from('checklist_module_config')
+      .update({ sort_order: index })
+      .eq('id', id)
+  )
+  await Promise.all(updates)
   revalidatePath('/bitacora')
   return {}
 }
