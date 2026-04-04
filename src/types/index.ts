@@ -3,6 +3,10 @@
 export type Shift = 'noche' | 'dia' | 'tarde'
 export type WellLevel = 'alto' | 'rebase'
 export type FeedingType = 'manual' | 'automatica'
+export type FishBehavior = 'activo' | 'letargico' | 'revisar'
+export type FeedLoss     = 'si' | 'no' | 'ayuno'
+export type BlowerActive = '1' | '2' | 'ambos'
+export type WaterLevel   = 'bajo' | 'medio' | 'alto'
 
 export interface Profile {
   id: string
@@ -48,7 +52,7 @@ export interface LogParameters {
   // FF
   ozone_pct: number | null
   intake_value: number | null
-  osmosis_value: number | null
+  osmosis_value: string | null
   temperature_ff: number | null
   ph_ff: number | null
   salinity_ff: number | null
@@ -56,7 +60,7 @@ export interface LogParameters {
   // Químicos (ambos)
   bicarbonate_kg: number | null
   chloride_kg: number | null
-  // Legacy (mantener compatibilidad)
+  // Legacy
   well_level: WellLevel | null
   chemical_b_kg: number | null
   chemical_cc: number | null
@@ -72,7 +76,6 @@ export interface ChecklistResponse {
   checked: boolean
 }
 
-// Tarea personalizada global (guardada en Supabase, tabla checklist_custom_tasks)
 export interface CustomChecklistTask {
   id: string
   key: string
@@ -84,7 +87,7 @@ export interface Fisicoquimico {
   id: string
   log_id: string
   identifier: string
-  time_slot: string   // e.g. '00:00' | '04:00' | '08:00' | '12:00' | '14:00' | '20:00'
+  time_slot: string
   o2_saturation: number | null
   dissolved_o2: number | null
   temperature: number | null
@@ -93,7 +96,6 @@ export interface Fisicoquimico {
   salinity: number | null
 }
 
-// Parámetros de Pozo (solo HAT)
 export interface PozoReading {
   id: string
   log_id: string
@@ -103,19 +105,87 @@ export interface PozoReading {
   dissolved_o2: number | null
 }
 
+/* ── FRY — nuevas interfaces ─────────────────────────────── */
+
+/** Una de las hasta 5 tomas de parámetros numéricos por turno */
+export interface FryNumericParam {
+  id:          string
+  log_id:      string
+  slot_number: 1 | 2 | 3 | 4 | 5
+  temperature: number | null
+  ph:          number | null
+  salinity:    number | null
+  ozone_pct:   number | null
+  orp:         number | null
+}
+
+/** Presión manómetro O₂ — un valor por slot A/B, compartido por todos los TKs */
+export interface FrySlotHeader {
+  id:              string
+  log_id:          string
+  time_slot:       string
+  o2_pressure_bar: number | null
+}
+
+/** Lectura de un tanque individual en un slot A/B */
+export interface FryTankReading {
+  id:              string
+  log_id:          string
+  time_slot:       string
+  identifier:      string          // 'TK101'–'TK110' | 'TK201'–'TK210'
+  o2_saturation:   number | null
+  dissolved_o2:    number | null
+  tank_intake_m3h: number | null
+  base_ml:         number | null
+  dose_ml:         number | null
+  fish_behavior:   FishBehavior | null
+  feed_loss:       FeedLoss | null
+}
+
+/** Sala de máquinas — 1 registro por turno */
+export interface FryMachineRoom {
+  id:                       string
+  log_id:                   string
+  water_intake:             number | null
+  rotofilter_pressure_bar:  number | null
+  blower_active:            BlowerActive | null
+  pump_line_before:         number | null
+  pump_line_after:          number | null
+  flowmeter_lpm:            number | null
+  ozone_manometer_bar:      number | null
+  active_pumps:             number | null
+  manifold_pressure:        number | null
+  pump_sector_water_level:  WaterLevel | null
+  pump_sector_operational:  boolean | null
+  camera12_drain:           number | null
+  camera12_water_level:     number | null
+}
+
 export interface LogFull {
   log: Log
   parameters: LogParameters | null
   checklist: ChecklistResponse[]
   fisicoquimicos: Fisicoquimico[]
   pozo?: PozoReading[]
+  // FRY — opcionales, solo presentes cuando module es fry1 o fry2
+  fryNumericParams?: FryNumericParam[]
+  frySlotHeaders?:   FrySlotHeader[]
+  fryTankReadings?:  FryTankReading[]
+  fryMachineRoom?:   FryMachineRoom | null
 }
 
-/* ── Module constants ──────────────────────────────── */
+/* ── Module constants ──────────────────────────────────────── */
 export const MODULES = ['HAT', 'FF', 'FRY1', 'FRY2', 'TERRAZA', 'Ongrowing'] as const
 export type ModuleName = typeof MODULES[number]
 
-/* ── Shift labels & times ──────────────────────────── */
+/* ── Module type guards ────────────────────────────────────── */
+export const isHAT  = (m: string) => m.toLowerCase() === 'hat'
+export const isFF   = (m: string) => m.toLowerCase() === 'ff'
+export const isFRY1 = (m: string) => m.toLowerCase() === 'fry1'
+export const isFRY2 = (m: string) => m.toLowerCase() === 'fry2'
+export const isFRY  = (m: string) => isFRY1(m) || isFRY2(m)
+
+/* ── Shift labels & times ──────────────────────────────────── */
 export const SHIFT_LABELS: Record<Shift, string> = {
   noche: 'Noche',
   dia:   'Día',
@@ -128,14 +198,13 @@ export const SHIFT_TIMES: Record<Shift, string> = {
   tarde: '13:30 – 23:30',
 }
 
-// Slots horarios por turno para fisicoquímicos
 export const SHIFT_SLOTS: Record<Shift, [string, string]> = {
   noche: ['00:00', '04:00'],
   dia:   ['08:00', '12:00'],
   tarde: ['14:00', '20:00'],
 }
 
-/* ── FQ identifiers por módulo ─────────────────────── */
+/* ── FQ identifiers por módulo ─────────────────────────────── */
 export const FQ_IDENTIFIERS_HAT = [
   'C1','C2','C3','C4','C5','C6','C7','C8','C9','C10',
 ] as const
@@ -144,13 +213,26 @@ export const FQ_IDENTIFIERS_FF = [
   'TK1','TK2','TK3','TK4','TK5','TK6',
 ] as const
 
-// Legacy (mantiene compatibilidad con código existente)
+export const FQ_IDENTIFIERS_FRY1 = [
+  'TK101','TK102','TK103','TK104','TK105',
+  'TK106','TK107','TK108','TK109','TK110',
+] as const
+
+export const FQ_IDENTIFIERS_FRY2 = [
+  'TK201','TK202','TK203','TK204','TK205',
+  'TK206','TK207','TK208','TK209','TK210',
+] as const
+
 export const FQ_IDENTIFIERS = [
   ...FQ_IDENTIFIERS_HAT,
   ...FQ_IDENTIFIERS_FF,
 ] as const
 
-/* ── Checklist base (común a todos los módulos) ────── */
+/* ── FRY slot numbers ──────────────────────────────────────── */
+export const FRY_NUMERIC_SLOTS = [1, 2, 3, 4, 5] as const
+export type FrySlotNumber = typeof FRY_NUMERIC_SLOTS[number]
+
+/* ── Checklist base ────────────────────────────────────────── */
 export const CHECKLIST_ITEMS = {
   generales: [
     { key: 'recepcion_turno',   label: 'Recepción de turno'  },

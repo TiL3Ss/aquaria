@@ -1,12 +1,10 @@
-// src/app/dashboard/actions.ts
-
 'use server'
 
 import { revalidatePath } from 'next/cache'
 import { redirect }        from 'next/navigation'
 import { createClient }    from '@/utils/supabase/server'
 import type { Shift, LogFull, CustomChecklistTask } from '@/types'
-import { CHECKLIST_ITEMS } from '@/types'
+import { CHECKLIST_ITEMS, isFRY } from '@/types'
 
 /* ─────────────────────────────────────────────────────────
    LOGS
@@ -51,17 +49,50 @@ export async function getLog(moduleSlug: string, date: string, shift: Shift): Pr
     .eq('module_id', module.id).eq('log_date', date).eq('shift', shift).single()
   if (!log) return null
 
-  const [
-    { data: parameters },
-    { data: checklist  },
-    { data: fisicoquimicos },
-    { data: pozo },
-  ] = await Promise.all([
+  // Queries base (comunes a todos los módulos)
+  const baseQueries = Promise.all([
     supabase.from('log_parameters')     .select('*').eq('log_id', log.id).single(),
     supabase.from('checklist_responses').select('*').eq('log_id', log.id),
     supabase.from('fisicoquimicos')     .select('*').eq('log_id', log.id),
     supabase.from('pozo_readings')      .select('*').eq('log_id', log.id),
   ])
+
+  if (isFRY(moduleSlug)) {
+    // Queries adicionales para FRY
+    const [
+      [{ data: parameters }, { data: checklist }, { data: fisicoquimicos }, { data: pozo }],
+      { data: fryNumericParams },
+      { data: frySlotHeaders },
+      { data: fryTankReadings },
+      { data: fryMachineRoom },
+    ] = await Promise.all([
+      baseQueries,
+      supabase.from('fry_numeric_params').select('*').eq('log_id', log.id).order('slot_number'),
+      supabase.from('fry_slot_header')   .select('*').eq('log_id', log.id),
+      supabase.from('fry_tank_readings') .select('*').eq('log_id', log.id),
+      supabase.from('fry_machine_room')  .select('*').eq('log_id', log.id).single(),
+    ])
+
+    return {
+      log,
+      parameters:      parameters     ?? null,
+      checklist:       checklist       ?? [],
+      fisicoquimicos:  fisicoquimicos  ?? [],
+      pozo:            pozo            ?? [],
+      fryNumericParams: fryNumericParams ?? [],
+      frySlotHeaders:   frySlotHeaders   ?? [],
+      fryTankReadings:  fryTankReadings  ?? [],
+      fryMachineRoom:   fryMachineRoom   ?? null,
+    }
+  }
+
+  // Módulos no-FRY
+  const [
+    { data: parameters },
+    { data: checklist },
+    { data: fisicoquimicos },
+    { data: pozo },
+  ] = await baseQueries
 
   return {
     log,
@@ -90,13 +121,13 @@ export async function createLog(data: Record<string, unknown>) {
   const { data: log, error: logError } = await supabase
     .from('logs')
     .insert({
-      user_id:               user.id,
-      module_id:             module.id,
-      log_date:              date,
+      user_id:              user.id,
+      module_id:            module.id,
+      log_date:             date,
       shift,
-      operator_name:         operatorName,
-      notes:                 notes || null,
-      additional_operators:  data.additional_operators as string | null,
+      operator_name:        operatorName,
+      notes:                notes || null,
+      additional_operators: data.additional_operators as string | null,
     })
     .select().single()
 
@@ -105,7 +136,7 @@ export async function createLog(data: Record<string, unknown>) {
     return { error: logError.message }
   }
 
-  // Parámetros
+  // Parámetros base
   await supabase.from('log_parameters').insert({
     log_id:             log.id,
     pump_main_bar:      data.pump_main_bar      as number | null,
@@ -142,7 +173,7 @@ export async function createLog(data: Record<string, unknown>) {
     )
   }
 
-  // Fisicoquímicos — solo filas con al menos un valor real
+  // Fisicoquímicos base
   const fqEntries = data.fisicoquimicos as Record<string, unknown>[]
   if (fqEntries?.length > 0) {
     const nonEmptyFq = fqEntries.filter(e =>
@@ -152,11 +183,11 @@ export async function createLog(data: Record<string, unknown>) {
       const { error: fqError } = await supabase.from('fisicoquimicos').insert(
         nonEmptyFq.map(e => ({ log_id: log.id, ...e }))
       )
-      if (fqError) console.error('[createLog] Error insertando fisicoquímicos:', fqError.message, fqError.code)
+      if (fqError) console.error('[createLog] Error insertando fisicoquímicos:', fqError.message)
     }
   }
 
-  // Pozo — solo filas con al menos un valor real
+  // Pozo
   const pozoEntries = data.pozo as Record<string, unknown>[]
   if (pozoEntries?.length > 0) {
     const nonEmptyPozo = pozoEntries.filter(e =>
@@ -166,7 +197,63 @@ export async function createLog(data: Record<string, unknown>) {
       const { error: pozoError } = await supabase.from('pozo_readings').insert(
         nonEmptyPozo.map(e => ({ log_id: log.id, ...e }))
       )
-      if (pozoError) console.error('[createLog] Error insertando pozo:', pozoError.message, pozoError.code)
+      if (pozoError) console.error('[createLog] Error insertando pozo:', pozoError.message)
+    }
+  }
+
+  // ── FRY — datos específicos ────────────────────────────────
+  if (isFRY(moduleSlug)) {
+    // 1. Parámetros numéricos (5 slots)
+    const fryNumeric = data.fryNumericParams as Record<string, unknown>[]
+    if (fryNumeric?.length > 0) {
+      const nonEmpty = fryNumeric.filter(e =>
+        e.temperature !== null || e.ph !== null ||
+        e.salinity !== null    || e.ozone_pct !== null || e.orp !== null
+      )
+      if (nonEmpty.length > 0) {
+        const { error } = await supabase.from('fry_numeric_params').insert(
+          nonEmpty.map(e => ({ log_id: log.id, ...e }))
+        )
+        if (error) console.error('[createLog] Error insertando fry_numeric_params:', error.message)
+      }
+    }
+
+    // 2. Encabezados de slot (presión O₂)
+    const fryHeaders = data.frySlotHeaders as Record<string, unknown>[]
+    if (fryHeaders?.length > 0) {
+      const nonEmpty = fryHeaders.filter(e => e.o2_pressure_bar !== null)
+      if (nonEmpty.length > 0) {
+        const { error } = await supabase.from('fry_slot_header').insert(
+          nonEmpty.map(e => ({ log_id: log.id, ...e }))
+        )
+        if (error) console.error('[createLog] Error insertando fry_slot_header:', error.message)
+      }
+    }
+
+    // 3. Lecturas por TK
+    const fryTanks = data.fryTankReadings as Record<string, unknown>[]
+    if (fryTanks?.length > 0) {
+      const nonEmpty = fryTanks.filter(e =>
+        e.o2_saturation !== null || e.dissolved_o2 !== null ||
+        e.tank_intake_m3h !== null || e.base_ml !== null ||
+        e.dose_ml !== null || e.fish_behavior !== null || e.feed_loss !== null
+      )
+      if (nonEmpty.length > 0) {
+        const { error } = await supabase.from('fry_tank_readings').insert(
+          nonEmpty.map(e => ({ log_id: log.id, ...e }))
+        )
+        if (error) console.error('[createLog] Error insertando fry_tank_readings:', error.message)
+      }
+    }
+
+    // 4. Sala de máquinas
+    const machineRoom = data.fryMachineRoom as Record<string, unknown> | null
+    if (machineRoom && Object.values(machineRoom).some(v => v !== null && v !== undefined)) {
+      const { error } = await supabase.from('fry_machine_room').insert({
+        log_id: log.id,
+        ...machineRoom,
+      })
+      if (error) console.error('[createLog] Error insertando fry_machine_room:', error.message)
     }
   }
 
@@ -178,6 +265,8 @@ export async function updateLog(logId: string, data: Record<string, unknown>) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'No autenticado' }
+
+  const moduleSlug = data.module_slug as string | undefined
 
   await supabase.from('logs')
     .update({
@@ -225,24 +314,67 @@ export async function updateLog(logId: string, data: Record<string, unknown>) {
     )
   }
 
-  // Fisicoquímicos — upsert completo, null borra valores anteriores
+  // Fisicoquímicos base
   const fqEntries = data.fisicoquimicos as Record<string, unknown>[]
   if (fqEntries?.length > 0) {
     const { error: fqError } = await supabase.from('fisicoquimicos').upsert(
       fqEntries.map(e => ({ log_id: logId, ...e })),
       { onConflict: 'log_id,identifier,time_slot' }
     )
-    if (fqError) console.error('[updateLog] Error en upsert fisicoquímicos:', fqError.message, fqError.code)
+    if (fqError) console.error('[updateLog] Error en upsert fisicoquímicos:', fqError.message)
   }
 
-  // Pozo — upsert completo
+  // Pozo
   const pozoEntries = data.pozo as Record<string, unknown>[]
   if (pozoEntries?.length > 0) {
     const { error: pozoError } = await supabase.from('pozo_readings').upsert(
       pozoEntries.map(e => ({ log_id: logId, ...e })),
       { onConflict: 'log_id,time_slot' }
     )
-    if (pozoError) console.error('[updateLog] Error en upsert pozo:', pozoError.message, pozoError.code)
+    if (pozoError) console.error('[updateLog] Error en upsert pozo:', pozoError.message)
+  }
+
+  // ── FRY — upserts ─────────────────────────────────────────
+  if (moduleSlug && isFRY(moduleSlug)) {
+    // 1. Parámetros numéricos
+    const fryNumeric = data.fryNumericParams as Record<string, unknown>[]
+    if (fryNumeric?.length > 0) {
+      const { error } = await supabase.from('fry_numeric_params').upsert(
+        fryNumeric.map(e => ({ log_id: logId, ...e })),
+        { onConflict: 'log_id,slot_number' }
+      )
+      if (error) console.error('[updateLog] Error en upsert fry_numeric_params:', error.message)
+    }
+
+    // 2. Encabezados de slot
+    const fryHeaders = data.frySlotHeaders as Record<string, unknown>[]
+    if (fryHeaders?.length > 0) {
+      const { error } = await supabase.from('fry_slot_header').upsert(
+        fryHeaders.map(e => ({ log_id: logId, ...e })),
+        { onConflict: 'log_id,time_slot' }
+      )
+      if (error) console.error('[updateLog] Error en upsert fry_slot_header:', error.message)
+    }
+
+    // 3. Lecturas por TK
+    const fryTanks = data.fryTankReadings as Record<string, unknown>[]
+    if (fryTanks?.length > 0) {
+      const { error } = await supabase.from('fry_tank_readings').upsert(
+        fryTanks.map(e => ({ log_id: logId, ...e })),
+        { onConflict: 'log_id,time_slot,identifier' }
+      )
+      if (error) console.error('[updateLog] Error en upsert fry_tank_readings:', error.message)
+    }
+
+    // 4. Sala de máquinas
+    const machineRoom = data.fryMachineRoom as Record<string, unknown> | null
+    if (machineRoom) {
+      const { error } = await supabase.from('fry_machine_room').upsert(
+        { log_id: logId, ...machineRoom },
+        { onConflict: 'log_id' }
+      )
+      if (error) console.error('[updateLog] Error en upsert fry_machine_room:', error.message)
+    }
   }
 
   revalidatePath('/bitacora')
@@ -342,52 +474,6 @@ export async function deleteChecklistConfigItem(id: string): Promise<{ error?: s
 }
 
 /* ─────────────────────────────────────────────────────────
-   HELPERS INTERNOS
-───────────────────────────────────────────────────────── */
-
-function buildParameters(formData: FormData) {
-  return {
-    pump_main_bar:      parseNum(formData.get('pump_main_bar')),
-    pump_biofilter_bar: parseNum(formData.get('pump_biofilter_bar')),
-    flowmeter_lpm:      parseNum(formData.get('flowmeter_lpm')),
-    flowmeter_room_lpm: parseNum(formData.get('flowmeter_room_lpm')),
-    buffer_tank_bar:    parseNum(formData.get('buffer_tank_bar')),
-    water_intake:       parseNum(formData.get('water_intake')),
-    ozone_pct:          parseNum(formData.get('ozone_pct')),
-    intake_value:       parseNum(formData.get('intake_value')),
-    osmosis_value:      (formData.get('osmosis_value') as string) || null,
-    ph_ff:              parseNum(formData.get('ph_ff')),
-    salinity_ff:        parseNum(formData.get('salinity_ff')),
-    orp_ff:             parseNum(formData.get('orp_ff')),
-    bicarbonate_kg:     parseNum(formData.get('bicarbonate_kg')),
-    chloride_kg:        parseNum(formData.get('chloride_kg')),
-    well_level:         (formData.get('well_level')   as string) || null,
-    chemical_b_kg:      parseNum(formData.get('chemical_b_kg')),
-    chemical_cc:        parseNum(formData.get('chemical_cc')),
-    metabisulfite:      parseNum(formData.get('metabisulfite')),
-    feeding_type:       (formData.get('feeding_type') as string) || null,
-    feeding_amount:     parseNum(formData.get('feeding_amount')),
-  }
-}
-
-function parseNum(val: FormDataEntryValue | null): number | null {
-  if (!val || val === '') return null
-  const n = parseFloat(val as string)
-  return isNaN(n) ? null : n
-}
-
-function parseAdditionalOperators(raw: string | null): string | null {
-  if (!raw) return null
-  try {
-    const arr = JSON.parse(raw) as string[]
-    const filtered = arr.filter(s => s.trim() !== '')
-    return filtered.length > 0 ? filtered.join(', ') : null
-  } catch {
-    return null
-  }
-}
-
-/* ─────────────────────────────────────────────────────────
    CUSTOM CHECKLIST TASKS — legacy
 ───────────────────────────────────────────────────────── */
 
@@ -420,4 +506,14 @@ export async function deleteCustomChecklistTask(id: string): Promise<{ error?: s
   if (error) return { error: error.message }
   revalidatePath('/', 'layout')
   return {}
+}
+
+/* ─────────────────────────────────────────────────────────
+   HELPERS INTERNOS
+───────────────────────────────────────────────────────── */
+
+function parseNum(val: FormDataEntryValue | null): number | null {
+  if (!val || val === '') return null
+  const n = parseFloat(val as string)
+  return isNaN(n) ? null : n
 }
