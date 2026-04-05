@@ -124,6 +124,7 @@ export default function BitacoraClient({
   const router      = useRouter()
   const formRef     = useRef<HTMLFormElement>(null)
   const isSavingRef = useRef(false)
+  const checklistRefs = useRef<Map<string, HTMLDivElement>>(new Map())
 
   /* ── UI state ─── */
   const [isEditing,  setIsEditing]  = useState(mode === 'create')
@@ -165,9 +166,13 @@ export default function BitacoraClient({
 
   /* ── Checklist order ── */
 
-  const [draggedId,   setDraggedId]   = useState<string | null>(null)
-  const [dragOverId,  setDragOverId]  = useState<string | null>(null)
+  
+  const [draggedId,  setDraggedId]  = useState<string | null>(null)
+  const [dragOverId, setDragOverId] = useState<string | null>(null)
+  const touchDragId  = useRef<string | null>(null)
+  const touchOverId  = useRef<string | null>(null)
  
+  // ── Desktop drag ──
   function handleDragStart(id: string) {
     setDraggedId(id)
   }
@@ -181,52 +186,78 @@ export default function BitacoraClient({
     setDragOverId(null)
   }
  
-  async function handleDrop(targetId: string) {
+  function handleDragEnd() {
+    setDraggedId(null)
     setDragOverId(null)
-    if (!draggedId || draggedId === targetId) { setDraggedId(null); return }
+  }
  
-    // Reordenar localmente
-    const oldIndex = config.findIndex(i => i.id === draggedId)
-    const newIndex = config.findIndex(i => i.id === targetId)
-    if (oldIndex === -1 || newIndex === -1) { setDraggedId(null); return }
+  async function commitReorder(fromId: string, toId: string) {
+    if (fromId === toId) return
+    const oldIndex = config.findIndex(i => i.id === fromId)
+    const newIndex = config.findIndex(i => i.id === toId)
+    if (oldIndex === -1 || newIndex === -1) return
  
     const reordered = [...config]
     const [moved] = reordered.splice(oldIndex, 1)
     reordered.splice(newIndex, 0, moved)
  
     setConfig(reordered)
-    setDraggedId(null)
- 
-    // Persistir en BD
     await reorderChecklistConfig(reordered.map(i => i.id))
   }
  
-  function handleDragEnd() {
-    setDraggedId(null)
+  async function handleDrop(targetId: string) {
     setDragOverId(null)
+    const from = draggedId
+    setDraggedId(null)
+    if (!from) return
+    await commitReorder(from, targetId)
   }
  
-  // Touch drag state
-  const touchDragId    = useRef<string | null>(null)
-  const touchStartY    = useRef<number>(0)
- 
+  // ── Mobile touch ──
   function handleTouchStart(e: React.TouchEvent, id: string) {
     if (!isEditing) return
-    touchDragId.current = id
-    touchStartY.current = e.touches[0].clientY
+    touchDragId.current  = id
+    touchOverId.current  = id
+    setDraggedId(id)
   }
  
-  function handleTouchEnd(e: React.TouchEvent) {
+  function handleTouchMove(e: React.TouchEvent) {
     if (!touchDragId.current) return
-    const touch     = e.changedTouches[0]
-    const el        = document.elementFromPoint(touch.clientX, touch.clientY)
-    const targetRow = el?.closest('[data-checklist-id]') as HTMLElement | null
-    const targetId  = targetRow?.dataset.checklistId
+    e.preventDefault() // evita scroll mientras arrastra
  
-    if (targetId && targetId !== touchDragId.current) {
-      handleDrop(targetId)
+    const touch = e.touches[0]
+    let found: string | null = null
+ 
+    // Recorrer los refs registrados y ver cuál contiene el punto actual
+    checklistRefs.current.forEach((el, id) => {
+      if (id === touchDragId.current) return
+      const rect = el.getBoundingClientRect()
+      if (
+        touch.clientY >= rect.top    &&
+        touch.clientY <= rect.bottom &&
+        touch.clientX >= rect.left   &&
+        touch.clientX <= rect.right
+      ) {
+        found = id
+      }
+    })
+ 
+    if (found && found !== touchOverId.current) {
+      touchOverId.current = found
+      setDragOverId(found)
     }
+  }
+ 
+  async function handleTouchEnd() {
+    const from = touchDragId.current
+    const to   = touchOverId.current
     touchDragId.current = null
+    touchOverId.current = null
+    setDraggedId(null)
+    setDragOverId(null)
+    if (from && to && from !== to) {
+      await commitReorder(from, to)
+    }
   }
 
   const activeItems = config.filter(i => i.active)
@@ -775,18 +806,23 @@ export default function BitacoraClient({
                 {config.map(item => (
                   <div
                     key={item.id}
-                    data-checklist-id={item.id}
-                    draggable={isEditing && !editingItem}
-                    onDragStart={() => handleDragStart(item.id)}
-                    onDragOver={e => handleDragOver(e, item.id)}
-                    onDragLeave={handleDragLeave}
-                    onDrop={() => handleDrop(item.id)}
-                    onDragEnd={handleDragEnd}
-                    onTouchStart={e => handleTouchStart(e, item.id)}
-                    onTouchEnd={handleTouchEnd}
-                    className={`flex items-center gap-2 rounded-xl transition-all
-                      ${dragOverId === item.id ? 'ring-2 ring-blue-300 bg-blue-50/50' : ''}
-                      ${draggedId  === item.id ? 'opacity-40 scale-[0.98]'           : ''}`}
+                    ref={el => {
+                      if (el) checklistRefs.current.set(item.id, el)
+                      else    checklistRefs.current.delete(item.id)
+                    }}
+                      data-checklist-id={item.id}
+                      draggable={isEditing && !editingItem}
+                      onDragStart={() => handleDragStart(item.id)}
+                      onDragOver={e  => handleDragOver(e, item.id)}
+                      onDragLeave={handleDragLeave}
+                      onDrop={() => handleDrop(item.id)}
+                      onDragEnd={handleDragEnd}
+                      onTouchStart={e => handleTouchStart(e, item.id)}
+                      onTouchMove={handleTouchMove}
+                      onTouchEnd={handleTouchEnd}
+                      className={`flex items-center gap-2 rounded-xl transition-all
+                        ${dragOverId === item.id ? 'ring-2 ring-blue-300 bg-blue-50/50' : ''}
+                        ${draggedId  === item.id ? 'opacity-40 scale-[0.98]'            : ''}`}
                   >
                     {/* Handle de arrastre — solo visible en modo edición */}
                     {isEditing && !editingItem && (

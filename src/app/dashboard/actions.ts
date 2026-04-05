@@ -413,7 +413,7 @@ export async function getChecklistConfig(moduleSlug: string): Promise<ChecklistC
     .from('checklist_module_config')
     .select('*')
     .eq('module_slug', moduleSlug)
-    .order('created_at', { ascending: true, nullsFirst: true })
+    .order('sort_order', { ascending: true, nullsFirst: false })
 
   if (existing && existing.length > 0) return existing
 

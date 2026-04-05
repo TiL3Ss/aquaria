@@ -87,7 +87,17 @@ export function generateBitacoraPdf(
               : isFRY2(module) ? [...FQ_IDENTIFIERS_FRY2]
               : []
 
-  const completadas = checklist.filter(c => c.checked)
+  const completadas = checklist
+    .filter(c => c.checked)
+    .sort((a, b) => {
+      const idxA = checklistConfig.findIndex(cfg => cfg.item_key === a.item_key)
+      const idxB = checklistConfig.findIndex(cfg => cfg.item_key === b.item_key)
+      // Items no encontrados en config van al final
+      const orderA = idxA === -1 ? 9999 : (checklistConfig[idxA].sort_order ?? idxA)
+      const orderB = idxB === -1 ? 9999 : (checklistConfig[idxB].sort_order ?? idxB)
+      return orderA - orderB
+    })
+
 
   /* ── Parámetros numéricos — HAT / FF ── */
   let paramPairs: [string, string][] = []
