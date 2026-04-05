@@ -53,10 +53,20 @@ function grid3(pairs: [string, string][]): string {
 }
 
 function fqTable(slot: string, fqIds: readonly string[], fisicoquimicos: LogFull['fisicoquimicos']): string {
-  const tempRow = fisicoquimicos.find(r => r.time_slot === slot)
+  // pH es compartido por slot (un único valor para todos los identificadores)
+  const firstRow = fisicoquimicos.find(r => r.time_slot === slot)
+  const phValue  = firstRow?.ph ?? null
+ 
   return `
     <div class="fq-slot">
-      <div class="fq-slot-title">${slot} — Temp: ${fmt(tempRow?.temperature, '°C')}</div>
+      <div class="fq-slot-title">
+        ${slot}
+        <span style="font-weight:400;color:#6b7280;margin-left:6px">
+          Temp: ${fmt(firstRow?.temperature, '°C')}
+          &nbsp;·&nbsp;
+          pH: ${fmt(phValue)}
+        </span>
+      </div>
       <table class="fq-table">
         <thead><tr><th>ID</th><th>Sat%</th><th>Mg/L</th></tr></thead>
         <tbody>

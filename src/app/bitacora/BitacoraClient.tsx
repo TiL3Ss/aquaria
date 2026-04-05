@@ -35,7 +35,7 @@ interface Props {
   checklistConfig: ChecklistConfigItem[]
 }
 
-type FQCell    = { o2_saturation?: number; dissolved_o2?: number; temperature?: number }
+type FQCell = { o2_saturation?: number; dissolved_o2?: number; temperature?: number; ph?: number }
 type FQState   = Record<string, Record<string, FQCell>>
 type PozoCell  = { temperature?: number; o2_saturation?: number; dissolved_o2?: number }
 type PozoState = Record<string, PozoCell>
@@ -278,6 +278,7 @@ export default function BitacoraClient({
           o2_saturation: toNum(f.o2_saturation),
           dissolved_o2:  toNum(f.dissolved_o2),
           temperature:   toNum(f.temperature),
+           ph:            toNum(f.ph),
         } : {}
       })
     })
@@ -474,8 +475,9 @@ export default function BitacoraClient({
           o2_saturation: cell.o2_saturation ?? null,
           dissolved_o2:  cell.dissolved_o2  ?? null,
           temperature:   ts === slotA ? tempA : tempB,
+          ph:            cell.ph            ?? null,
         }
-        if (filterEmpty && !hasAnyValue(entry, ['o2_saturation', 'dissolved_o2', 'temperature'])) return
+        if (filterEmpty && !hasAnyValue(entry, ['o2_saturation', 'dissolved_o2', 'temperature', 'ph'])) return
         entries.push(entry)
       })
     })
@@ -1066,7 +1068,7 @@ export default function BitacoraClient({
                   </button>
                 ))}
               </div>
-              <div className="mb-4">
+              <div className="grid grid-cols-2 gap-x-3 mb-4">
                 <Field label={`Temperatura ${currentSlot}`}>
                   <div className="relative">
                     <input type="number" step="0.01"
@@ -1078,18 +1080,41 @@ export default function BitacoraClient({
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-gray-400 font-medium pointer-events-none">°C</span>
                   </div>
                 </Field>
+                <Field label={`pH ${currentSlot}`}>
+                  <input type="number" step="0.01"
+                    value={fqData[fqIds[0]]?.[currentSlot]?.ph ?? ''}
+                    onChange={e => {
+                      const v = e.target.value === '' ? undefined : parseFloat(e.target.value)
+                      // pH se guarda una sola vez por slot (igual que temperatura)
+                      // lo almacenamos en todos los identificadores del slot actual
+                      setFqData(prev => {
+                        const next = { ...prev }
+                        fqIds.forEach(id => {
+                          next[id] = {
+                            ...next[id],
+                            [currentSlot]: { ...next[id]?.[currentSlot], ph: v },
+                          }
+                        })
+                        return next
+                      })
+                    }}
+                    readOnly={!isEditing} placeholder={isEditing ? '0.00' : '—'}
+                    className={fieldCls(isEditing)}
+                  />
+                </Field>
               </div>
               <div className="overflow-x-auto -mx-4 px-4 scrollbar-none">
                 <table className="border-collapse w-full">
-                  <thead>
+                     <thead>
                     <tr>
                       <th className="text-left text-[11px] font-bold text-gray-400 uppercase tracking-wide pb-2 pr-3 sticky left-0 bg-white z-10 w-12">ID</th>
                       <th className="text-center text-[11px] text-gray-400 font-semibold pb-2 px-2">Sat%</th>
                       <th className="text-center text-[11px] text-gray-400 font-semibold pb-2 px-2">Mg/L</th>
+                      <th className="text-center text-[11px] text-gray-400 font-semibold pb-2 px-2">pH</th>
                     </tr>
                   </thead>
-                  <tbody>
-                    {fqIds.map(id => (
+                   <tbody>
+                    {fqIds.map((id, rowIdx) => (
                       <tr key={id}>
                         <td className="pr-3 py-1.5 font-bold text-[13px] text-blue-500 sticky left-0 bg-white whitespace-nowrap">{id}</td>
                         {(['o2_saturation', 'dissolved_o2'] as const).map(field => (
@@ -1103,6 +1128,34 @@ export default function BitacoraClient({
                             />
                           </td>
                         ))}
+                        {/* pH — solo se edita en la primera fila, el resto es solo lectura y muestra el mismo valor */}
+                        <td className="px-1 py-1.5">
+                          {rowIdx === 0 ? (
+                            <input type="number" step="0.01"
+                              value={fqData[id]?.[currentSlot]?.ph ?? ''}
+                              onChange={e => {
+                                const v = e.target.value === '' ? undefined : parseFloat(e.target.value)
+                                setFqData(prev => {
+                                  const next = { ...prev }
+                                  fqIds.forEach(fid => {
+                                    next[fid] = {
+                                      ...next[fid],
+                                      [currentSlot]: { ...next[fid]?.[currentSlot], ph: v },
+                                    }
+                                  })
+                                  return next
+                                })
+                              }}
+                              readOnly={!isEditing}
+                              className="fq-input w-full text-center"
+                              placeholder="—"
+                            />
+                          ) : (
+                            <span className="block text-center text-[12px] text-gray-400 tabular-nums">
+                              {fqData[fqIds[0]]?.[currentSlot]?.ph ?? '—'}
+                            </span>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
