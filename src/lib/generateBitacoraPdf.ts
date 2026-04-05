@@ -466,10 +466,21 @@ export function generateBitacoraPdf(
 
     <div class="block">
       <div class="block-title">Químicos</div>
-      ${grid2([
-        ['Bicarbonato de sodio', fmt(p?.bicarbonate_kg, 'kg')],
-        ['Cloruro de calcio',    fmt(p?.chloride_kg,    'kg')],
-      ])}
+      ${(() => {
+        const mr  = logFull.fryMachineRoom
+        const sal = mr?.sal_manual === true
+ 
+        const pairs: [string, string][] = [
+          ['Bicarbonato de sodio', fmt(p?.bicarbonate_kg, 'kg')],
+          ['Cloruro de calcio',    fmt(p?.chloride_kg,    'kg')],
+          ['SAL Manual',
+            sal
+              ? `Sí${mr?.sal_manual_kg != null ? ` — ${mr.sal_manual_kg} kg` : ''}`
+              : 'No'
+          ],
+        ]
+        return grid3(pairs)
+      })()}
       <div style="margin-top:7px;">
         <div class="block-title">Observaciones</div>
         ${log.notes

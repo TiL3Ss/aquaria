@@ -81,6 +81,8 @@ type MachineRoomState = {
   pump_sector_operational?:  boolean
   camera12_drain?:           string
   camera12_water_level?:     string
+  sal_manual?:               boolean
+  sal_manual_kg?:            string
 }
 
 /* ── Constants ─────────────────────────────────────── */
@@ -378,6 +380,8 @@ export default function BitacoraClient({
       pump_sector_operational: mr.pump_sector_operational ?? false,
       camera12_drain:          mr.camera12_drain          !== null ? String(mr.camera12_drain)          : '',
       camera12_water_level:    mr.camera12_water_level    !== null ? String(mr.camera12_water_level)    : '',
+      sal_manual:              mr.sal_manual              ?? false,
+      sal_manual_kg:           mr.sal_manual_kg           !== null ? String(mr.sal_manual_kg)           : '',
     }
   })
 
@@ -568,6 +572,10 @@ export default function BitacoraClient({
       pump_sector_operational: machineRoom.pump_sector_operational ?? null,
       camera12_drain:          machineRoom.camera12_drain          !== '' ? parseInt(machineRoom.camera12_drain            ?? '') : null,
       camera12_water_level:    machineRoom.camera12_water_level    !== '' ? parseFloat(machineRoom.camera12_water_level    ?? '') : null,
+      sal_manual:              machineRoom.sal_manual              ?? null,
+      sal_manual_kg:           machineRoom.sal_manual && machineRoom.sal_manual_kg !== ''
+                                 ? parseFloat(machineRoom.sal_manual_kg ?? '')
+                                 : null,
     }
   }
 
@@ -1050,6 +1058,59 @@ export default function BitacoraClient({
             <div className="grid grid-cols-2 gap-x-3 gap-y-3">
               <Field label="Bicarbonato de sodio">{numField('bicarbonate_kg', params?.bicarbonate_kg, 'kg')}</Field>
               <Field label="Cloruro de calcio">   {numField('chloride_kg',    params?.chloride_kg,    'kg')}</Field>
+ 
+              {isFRY(module) && (
+                <>
+                  {/* SAL Manual — switch Sí/No */}
+                  <Field label="SAL Manual" className="col-span-2">
+                    <div className="flex items-center gap-3">
+                      {/* Toggle pill */}
+                      <button
+                        type="button"
+                        onClick={() => isEditing && setMR('sal_manual', !machineRoom.sal_manual)}
+                        disabled={!isEditing}
+                        className={`relative inline-flex h-7 w-12 flex-shrink-0 rounded-full border-2 border-transparent
+                          transition-colors duration-200 focus:outline-none
+                          ${machineRoom.sal_manual ? 'bg-blue-500' : 'bg-gray-200'}
+                          ${!isEditing ? 'opacity-60 cursor-default' : 'cursor-pointer'}`}
+                        role="switch"
+                        aria-checked={machineRoom.sal_manual ?? false}
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-6 w-6 transform rounded-full
+                            bg-white shadow ring-0 transition duration-200
+                            ${machineRoom.sal_manual ? 'translate-x-5' : 'translate-x-0'}`}
+                        />
+                      </button>
+                      <span className={`text-[14px] font-semibold transition-colors
+                        ${machineRoom.sal_manual ? 'text-blue-600' : 'text-gray-400'}`}>
+                        {machineRoom.sal_manual ? 'Sí' : 'No'}
+                      </span>
+                    </div>
+                  </Field>
+ 
+                  {/* Cantidad de sal — solo visible cuando sal_manual = true */}
+                  {machineRoom.sal_manual && (
+                    <Field label="Cantidad de sal" className="col-span-2">
+                      <div className="relative">
+                        <input
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          value={machineRoom.sal_manual_kg ?? ''}
+                          onChange={e => setMR('sal_manual_kg', e.target.value)}
+                          readOnly={!isEditing}
+                          placeholder={isEditing ? '0.0' : '—'}
+                          className={`${fieldCls(isEditing)} pr-10`}
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-gray-400 font-medium pointer-events-none">
+                          kg
+                        </span>
+                      </div>
+                    </Field>
+                  )}
+                </>
+              )}
             </div>
           </Card>
 

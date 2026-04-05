@@ -160,6 +160,8 @@ export interface FryMachineRoom {
   pump_sector_operational:  boolean | null
   camera12_drain:           number | null
   camera12_water_level:     number | null
+  sal_manual:               boolean | null
+  sal_manual_kg:            number | null
 }
 
 export interface LogFull {
