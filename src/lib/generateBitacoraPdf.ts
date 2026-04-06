@@ -261,7 +261,7 @@ export function generateBitacoraPdf(
           // Fila colapsada: TK | "Vacío" (colspan 5) | C | A
           return `<tr style="opacity:0.35">
             <td class="fq-id">${id}</td>
-            <td colspan="5" style="text-align:center;font-style:italic;font-size:7.5px;color:#9ca3af">Vacío</td>
+            <td colspan="5" style="text-align:center;font-style:italic;font-size:7.5px;color:#1C1D1E">Vacío</td>
             <td>${r?.fish_behavior ? (behaviorMap[r.fish_behavior] ?? '—') : '—'}</td>
             <td>${r?.feed_loss     ? (feedMap[r.feed_loss]         ?? '—') : '—'}</td>
           </tr>`
