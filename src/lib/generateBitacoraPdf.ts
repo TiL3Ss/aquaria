@@ -272,7 +272,7 @@ export function generateBitacoraPdf(
       ${mrCell(
         'Rotofiltro aspersores',
         '[5 – 7 bar]',
-        rated(mr.rotofilter_pressure_bar, 'bar', 6.0, 7.0),
+        rated(mr.rotofilter_pressure_bar, 'bar', 5.0, 7.0),
       )}
       ${mrCell(
         'Presión línea — antes',
@@ -572,17 +572,22 @@ export function generateBitacoraPdf(
     </div>
 
     <div class="block">
-      <div class="block-title">Químicos</div>
-      ${grid2([
+    <div class="block-title">Químicos</div>
+    ${(() => {
+      const mr  = logFull.fryMachineRoom
+      const sal = mr?.sal_manual === true
+
+      const pairs: [string, string][] = [
         ['Bicarbonato de sodio', fmt(p?.bicarbonate_kg, 'kg')],
         ['Cloruro de calcio',    fmt(p?.chloride_kg,    'kg')],
-      ])}
-      <div style="margin-top:7px;">
-        <div class="block-title">Observaciones</div>
-        ${log.notes
-          ? `<div class="notes">${log.notes.replace(/\n/g, '<br>')}</div>`
-          : '<span class="empty">Sin observaciones.</span>'}
-      </div>
+        ['SAL Manual',
+          sal
+            ? `Sí${mr?.sal_manual_kg != null ? ` — ${mr.sal_manual_kg} kg` : ''}`
+            : 'No'
+        ],
+      ]
+      return grid3(pairs)
+    })()}
     </div>
 
     <!-- Fila 2: Fisicoquímicos TK — slot A y B lado a lado -->
