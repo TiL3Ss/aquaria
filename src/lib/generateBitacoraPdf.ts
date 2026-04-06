@@ -248,15 +248,34 @@ export function generateBitacoraPdf(
       const o2Press = header?.o2_pressure_bar != null ? `${header.o2_pressure_bar}\u00a0bar` : '—'
       const rows    = fqIds.map(id => {
         const r = tankReadings.find(t => t.time_slot === slot && t.identifier === id)
+
+        // Un TK se considera vacío cuando todos sus valores numéricos son 0 o null/undefined
+        const numericAllEmpty =
+          (r?.o2_saturation   == null || r.o2_saturation   === 0) &&
+          (r?.dissolved_o2    == null || r.dissolved_o2    === 0) &&
+          (r?.tank_intake_m3h == null || r.tank_intake_m3h === 0) &&
+          (r?.base_ml         == null || r.base_ml         === 0) &&
+          (r?.dose_ml         == null || r.dose_ml         === 0)
+
+        if (!r || numericAllEmpty) {
+          // Fila colapsada: TK | "Vacío" (colspan 5) | C | A
+          return `<tr style="opacity:0.35">
+            <td class="fq-id">${id}</td>
+            <td colspan="5" style="text-align:center;font-style:italic;font-size:7.5px;color:#9ca3af">Vacío</td>
+            <td>${r?.fish_behavior ? (behaviorMap[r.fish_behavior] ?? '—') : '—'}</td>
+            <td>${r?.feed_loss     ? (feedMap[r.feed_loss]         ?? '—') : '—'}</td>
+          </tr>`
+        }
+
         return `<tr>
           <td class="fq-id">${id}</td>
-          <td>${fmt(r?.o2_saturation)}</td>
-          <td>${fmt(r?.dissolved_o2)}</td>
-          <td>${fmt(r?.tank_intake_m3h)}</td>
-          <td>${r?.base_ml  != null ? String(r.base_ml)  : '—'}</td>
-          <td>${r?.dose_ml  != null ? String(r.dose_ml)  : '—'}</td>
-          <td>${r?.fish_behavior ? (behaviorMap[r.fish_behavior] ?? '—') : '—'}</td>
-          <td>${r?.feed_loss     ? (feedMap[r.feed_loss]         ?? '—') : '—'}</td>
+          <td>${fmt(r.o2_saturation)}</td>
+          <td>${fmt(r.dissolved_o2)}</td>
+          <td>${fmt(r.tank_intake_m3h)}</td>
+          <td>${r.base_ml  != null ? String(r.base_ml)  : '—'}</td>
+          <td>${r.dose_ml  != null ? String(r.dose_ml)  : '—'}</td>
+          <td>${r.fish_behavior ? (behaviorMap[r.fish_behavior] ?? '—') : '—'}</td>
+          <td>${r.feed_loss     ? (feedMap[r.feed_loss]         ?? '—') : '—'}</td>
         </tr>`
       }).join('')
       return `<div>
