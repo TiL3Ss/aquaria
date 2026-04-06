@@ -44,6 +44,7 @@ export default async function BitacoraPage({ searchParams }: Props) {
       mode={mode}
       operatorName={profile?.full_name ?? ''}
       checklistConfig={checklistConfig}
+      currentUserId={user.id}
     />
   )
 }

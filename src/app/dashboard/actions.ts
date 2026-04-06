@@ -274,7 +274,7 @@ export async function updateLog(logId: string, data: Record<string, unknown>) {
       notes:                (data.notes as string) || null,
       additional_operators: data.additional_operators as string | null,
     })
-    .eq('id', logId).eq('user_id', user.id)
+    .eq('id', logId)
 
   await supabase.from('log_parameters')
     .update({
