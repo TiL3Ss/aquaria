@@ -573,6 +573,7 @@ export function generateBitacoraPdf(
 
     <div class="block">
     <div class="block-title">Químicos</div>
+
     ${(() => {
       const mr  = logFull.fryMachineRoom
       const sal = mr?.sal_manual === true
@@ -588,6 +589,11 @@ export function generateBitacoraPdf(
       ]
       return grid3(pairs)
     })()}
+    <div style="margin-top:7px;">
+      <div class="block-title">Observaciones</div>
+      ${log.notes
+        ? `<div class="notes">${log.notes.replace(/\n/g, '<br>')}</div>`
+        : '<span class="empty">Sin observaciones.</span>'}
     </div>
 
     <!-- Fila 2: Fisicoquímicos TK — slot A y B lado a lado -->
