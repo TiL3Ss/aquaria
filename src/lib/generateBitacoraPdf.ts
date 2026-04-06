@@ -53,20 +53,10 @@ function grid3(pairs: [string, string][]): string {
 }
 
 function fqTable(slot: string, fqIds: readonly string[], fisicoquimicos: LogFull['fisicoquimicos']): string {
-  // pH es compartido por slot (un único valor para todos los identificadores)
-  const firstRow = fisicoquimicos.find(r => r.time_slot === slot)
-  const phValue  = firstRow?.ph ?? null
- 
+  const tempRow = fisicoquimicos.find(r => r.time_slot === slot)
   return `
     <div class="fq-slot">
-      <div class="fq-slot-title">
-        ${slot}
-        <span style="font-weight:400;color:#6b7280;margin-left:6px">
-          Temp: ${fmt(firstRow?.temperature, '°C')}
-          &nbsp;·&nbsp;
-          pH: ${fmt(phValue)}
-        </span>
-      </div>
+      <div class="fq-slot-title">${slot} — Temp: ${fmt(tempRow?.temperature, '°C')}</div>
       <table class="fq-table">
         <thead><tr><th>ID</th><th>Sat%</th><th>Mg/L</th></tr></thead>
         <tbody>
@@ -97,17 +87,7 @@ export function generateBitacoraPdf(
               : isFRY2(module) ? [...FQ_IDENTIFIERS_FRY2]
               : []
 
-  const completadas = checklist
-    .filter(c => c.checked)
-    .sort((a, b) => {
-      const idxA = checklistConfig.findIndex(cfg => cfg.item_key === a.item_key)
-      const idxB = checklistConfig.findIndex(cfg => cfg.item_key === b.item_key)
-      // Items no encontrados en config van al final
-      const orderA = idxA === -1 ? 9999 : (checklistConfig[idxA].sort_order ?? idxA)
-      const orderB = idxB === -1 ? 9999 : (checklistConfig[idxB].sort_order ?? idxB)
-      return orderA - orderB
-    })
-
+  const completadas = checklist.filter(c => c.checked)
 
   /* ── Parámetros numéricos — HAT / FF ── */
   let paramPairs: [string, string][] = []
@@ -235,27 +215,118 @@ export function generateBitacoraPdf(
     return `<div class="tk-pair">${slotTable(slotA)}${slotTable(slotB)}</div>`
   })() : ''
 
-  /* ── FRY — Sala de Máquinas en grid de 3 columnas ── */
+  /* ── FRY — Sala de Máquinas ── */
   const fryMachineHtml = isFRY(module) ? (() => {
     const mr = logFull.fryMachineRoom
     if (!mr) return '<span class="empty">Sin datos registrados.</span>'
+
     const blowerMap: Record<string, string> = { '1': 'Blower 1', '2': 'Blower 2', 'ambos': 'Ambos' }
     const levelMap:  Record<string, string> = { bajo: 'Bajo', medio: 'Medio', alto: 'Alto' }
-    return grid3([
-      ['Ingreso agua',          fmt(mr.water_intake)],
-      ['Rotofiltro aspersores', fmt(mr.rotofilter_pressure_bar, 'bar')],
-      ['Blower operativo',      mr.blower_active ? (blowerMap[mr.blower_active] ?? '—') : '—'],
-      ['Bombas operativas',     mr.active_pumps != null ? String(mr.active_pumps) : '—'],
-      ['Presión línea antes',   fmt(mr.pump_line_before, 'bar')],
-      ['Presión línea después', fmt(mr.pump_line_after,  'bar')],
-      ['Flujómetro',            fmt(mr.flowmeter_lpm,    'L/min')],
-      ['Manómetro ozono',       fmt(mr.ozone_manometer_bar, 'bar')],
-      ['Presión manifold',      fmt(mr.manifold_pressure,   'bar')],
-      ['Nivel agua bombas',     mr.pump_sector_water_level ? (levelMap[mr.pump_sector_water_level] ?? '—') : '—'],
-      ['Bombas sector op.',     mr.pump_sector_operational === true ? 'Sí' : mr.pump_sector_operational === false ? 'No' : '—'],
-      ['Vaciado cámara 12',     mr.camera12_drain != null ? String(mr.camera12_drain) : '—'],
-      ['Nivel cámara 12',       fmt(mr.camera12_water_level)],
-    ])
+
+    /* Devuelve un badge de estado coloreado según los rangos definidos */
+    type Status = 'bajo' | 'okey' | 'alto'
+    function statusBadge(val: number | null | undefined, low: number, highOk: number): string {
+      if (val === null || val === undefined) return ''
+      let s: Status
+      if      (val < low)    s = 'bajo'
+      else if (val <= highOk) s = 'okey'
+      else                    s = 'alto'
+      const colors: Record<Status, string> = {
+        bajo:  'background:#fef9c3;color:#854d0e;border:1px solid #fde047',
+        okey:  'background:#dcfce7;color:#166534;border:1px solid #86efac',
+        alto:  'background:#fee2e2;color:#991b1b;border:1px solid #fca5a5',
+      }
+      const labels: Record<Status, string> = { bajo: 'Bajo', okey: 'Okey', alto: 'Alto' }
+      return `<span style="font-size:7.5px;font-weight:700;padding:1px 5px;border-radius:99px;margin-left:4px;${colors[s]}">${labels[s]}</span>`
+    }
+
+    /* Valor + badge en una sola cadena */
+    function rated(
+      val:   number | null | undefined,
+      unit:  string,
+      low:   number,
+      highOk: number,
+    ): string {
+      if (val === null || val === undefined) return '—'
+      return `${val}\u00a0${unit}${statusBadge(val, low, highOk)}`
+    }
+
+    /* Celda de sala de máquinas con label, hint de referencia y valor */
+    function mrCell(label: string, hint: string, value: string): string {
+      return `<div class="mr-cell">
+        <div class="mr-label">${label}</div>
+        <div class="mr-hint">${hint}</div>
+        <div class="mr-value">${value}</div>
+      </div>`
+    }
+
+    /* Celda simple sin hint ni badge (datos sin rango definido) */
+    function mrSimple(label: string, value: string): string {
+      return `<div class="mr-cell">
+        <div class="mr-label">${label}</div>
+        <div class="mr-value" style="margin-top:4px">${value}</div>
+      </div>`
+    }
+
+    return `<div class="mr-grid">
+      ${mrCell(
+        'Rotofiltro aspersores',
+        '[5 – 7 bar]',
+        rated(mr.rotofilter_pressure_bar, 'bar', 6.0, 7.0),
+      )}
+      ${mrCell(
+        'Presión línea — antes',
+        '[1,5 bar aprox]',
+        rated(mr.pump_line_before, 'bar', 1.50, 1.59),
+      )}
+      ${mrCell(
+        'Manómetro de Ozono',
+        '[1,7 – 1,98 bar]',
+        rated(mr.ozone_manometer_bar, 'bar', 1.70, 1.98),
+      )}
+      ${mrCell(
+        'Presión línea — después',
+        '[1 bar aprox]',
+        rated(mr.pump_line_after, 'bar', 0.79, 1.29),
+      )}
+      ${mrCell(
+        'Presión manifold',
+        '[±0,6 bar]',
+        rated(mr.manifold_pressure, 'bar', 0.60, 0.69),
+      )}
+      ${mrSimple(
+        'Ingreso de agua',
+        fmt(mr.water_intake),
+      )}
+      ${mrSimple(
+        'Flujómetro',
+        fmt(mr.flowmeter_lpm, 'L/min'),
+      )}
+      ${mrSimple(
+        'Blower operativo',
+        mr.blower_active ? (blowerMap[mr.blower_active] ?? '—') : '—',
+      )}
+      ${mrSimple(
+        'Bombas operativas',
+        mr.active_pumps != null ? String(mr.active_pumps) : '—',
+      )}
+      ${mrSimple(
+        'Nivel agua — bombas',
+        mr.pump_sector_water_level ? (levelMap[mr.pump_sector_water_level] ?? '—') : '—',
+      )}
+      ${mrSimple(
+        'Bombas sector op.',
+        mr.pump_sector_operational === true ? 'Sí' : mr.pump_sector_operational === false ? 'No' : '—',
+      )}
+      ${mrSimple(
+        'Vaciado cámara 12',
+        mr.camera12_drain != null ? String(mr.camera12_drain) : '—',
+      )}
+      ${mrSimple(
+        'Nivel cámara 12',
+        fmt(mr.camera12_water_level),
+      )}
+    </div>`
   })() : ''
 
   /* ── HTML ─────────────────────────────────────────────────── */
@@ -349,6 +420,42 @@ export function generateBitacoraPdf(
 
     /* ── FRY misc ── */
     .fry-legend { font-size: 7.5px; color: #9ca3af; margin-top: 2px; }
+
+    /* ── Sala de Máquinas — grid compacto con hints de rango ── */
+    .mr-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 5px 8px;
+    }
+    .mr-cell {
+      background: #f9fafb;
+      border-radius: 5px;
+      padding: 4px 6px;
+    }
+    .mr-label {
+      font-size: 7.5px;
+      color: #9ca3af;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      line-height: 1.2;
+      margin-bottom: 1px;
+    }
+    .mr-hint {
+      font-size: 7px;
+      color: #c0c4cc;
+      margin-bottom: 3px;
+      line-height: 1.2;
+    }
+    .mr-value {
+      font-size: 10px;
+      font-weight: 700;
+      color: #111;
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 2px;
+    }
 
     /* ── Notes ── */
     .notes {
@@ -466,21 +573,10 @@ export function generateBitacoraPdf(
 
     <div class="block">
       <div class="block-title">Químicos</div>
-      ${(() => {
-        const mr  = logFull.fryMachineRoom
-        const sal = mr?.sal_manual === true
- 
-        const pairs: [string, string][] = [
-          ['Bicarbonato de sodio', fmt(p?.bicarbonate_kg, 'kg')],
-          ['Cloruro de calcio',    fmt(p?.chloride_kg,    'kg')],
-          ['SAL Manual',
-            sal
-              ? `Sí${mr?.sal_manual_kg != null ? ` — ${mr.sal_manual_kg} kg` : ''}`
-              : 'No'
-          ],
-        ]
-        return grid3(pairs)
-      })()}
+      ${grid2([
+        ['Bicarbonato de sodio', fmt(p?.bicarbonate_kg, 'kg')],
+        ['Cloruro de calcio',    fmt(p?.chloride_kg,    'kg')],
+      ])}
       <div style="margin-top:7px;">
         <div class="block-title">Observaciones</div>
         ${log.notes
