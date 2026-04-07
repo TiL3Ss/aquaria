@@ -167,6 +167,7 @@ export default function BitacoraClient({
   const [newTaskLabel, setNewTaskLabel] = useState('')
   const [editingItem,  setEditingItem]  = useState<{ id: string; label: string } | null>(null)
   const [taskPending,  setTaskPending]  = useState(false)
+  const [reorderMode, setReorderMode]  = useState(false)
 
   /* ── Checklist order ── */
 
@@ -860,21 +861,21 @@ export default function BitacoraClient({
                       else    checklistRefs.current.delete(item.id)
                     }}
                       data-checklist-id={item.id}
-                      draggable={isEditing && !editingItem}
-                      onDragStart={() => handleDragStart(item.id)}
-                      onDragOver={e  => handleDragOver(e, item.id)}
-                      onDragLeave={handleDragLeave}
-                      onDrop={() => handleDrop(item.id)}
-                      onDragEnd={handleDragEnd}
-                      onTouchStart={e => handleTouchStart(e, item.id)}
-                      onTouchMove={handleTouchMove}
-                      onTouchEnd={handleTouchEnd}
+                      draggable={isEditing && !editingItem && reorderMode}
+                      onDragStart={() => reorderMode && handleDragStart(item.id)}
+                      onDragOver={e  => reorderMode && handleDragOver(e, item.id)}
+                      onDragLeave={() => reorderMode && handleDragLeave()}
+                      onDrop={() => reorderMode && handleDrop(item.id)}
+                      onDragEnd={() => reorderMode && handleDragEnd()}
+                      onTouchStart={e => reorderMode && handleTouchStart(e, item.id)}
+                      onTouchMove={e  => reorderMode && handleTouchMove(e)}
+                      onTouchEnd={() => reorderMode && handleTouchEnd()}
                       className={`flex items-center gap-2 rounded-xl transition-all
                         ${dragOverId === item.id ? 'ring-2 ring-blue-300 bg-blue-50/50' : ''}
                         ${draggedId  === item.id ? 'opacity-40 scale-[0.98]'            : ''}`}
                   >
                     {/* Handle de arrastre — solo visible en modo edición */}
-                    {isEditing && !editingItem && (
+                    {isEditing && !editingItem && reorderMode && (
                       <div
                         className="flex-shrink-0 cursor-grab active:cursor-grabbing px-1 py-3 text-gray-300 hover:text-gray-400 transition-colors touch-none select-none"
                         title="Arrastrar para reordenar">
@@ -935,11 +936,36 @@ export default function BitacoraClient({
                   </div>
                 ))}
               </div>
-              {isEditing && !editingItem && config.length > 1 && (
-                <p className="text-[10px] text-gray-400 text-center py-1">
-                  ☰ Arrastra para reordenar
-                </p>
+              {isEditing && config.length > 1 && !editingItem && (
+                <div className="flex items-center justify-between px-1 py-1.5">
+                  <span className="text-[11px] text-gray-400">
+                    {reorderMode ? 'Arrastra para cambiar el orden' : 'Modo reordenar'}
+                  </span>
+                  {/* Toggle switch */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReorderMode(prev => !prev)
+                      // Limpiar estado de drag al desactivar
+                      setDraggedId(null)
+                      setDragOverId(null)
+                    }}
+                    className={`relative inline-flex h-6 w-10 flex-shrink-0 rounded-full border-2 border-transparent
+                      transition-colors duration-200 focus:outline-none
+                      ${reorderMode ? 'bg-blue-500' : 'bg-gray-200'}`}
+                    role="switch"
+                    aria-checked={reorderMode}
+                    aria-label="Activar modo reordenar"
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full
+                        bg-white shadow ring-0 transition duration-200
+                        ${reorderMode ? 'translate-x-4' : 'translate-x-0'}`}
+                    />
+                  </button>
+                </div>
               )}
+ 
               {isEditing && (
                 <div className="pt-2 space-y-2 border-t border-gray-100">
                   <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pt-1">
