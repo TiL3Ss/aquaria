@@ -1159,7 +1159,7 @@ export default function BitacoraClient({
                     <Field label="Ingreso de agua" className="col-span-2">
                       {numField('water_intake', params?.water_intake)}
                     </Field>
-                    <Field label="Ingreso TK (Pozo)" className="col-span-2">
+                    <Field label="Ingreso TKs" className="col-span-2">
                       {numField('pozo_intake_m3h', params?.pozo_intake_m3h, 'm³/h')}
                     </Field>
                   </>
