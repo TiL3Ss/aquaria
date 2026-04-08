@@ -666,6 +666,7 @@ export default function BodegaClient({
               <span className="text-[12px] font-semibold">Eliminar</span>
             </button>
           </div>
+          <br />
 
           {/* ── All products list ─── */}
           {!search && !filterCalibre && !filterMedicado && !filterTipo && !filterSeccion && products.length > 0 && (
