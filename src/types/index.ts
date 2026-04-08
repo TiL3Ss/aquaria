@@ -105,6 +105,66 @@ export interface PozoReading {
   dissolved_o2: number | null
 }
 
+// Alimentación FF
+
+export type SobranteVariant = 'balde' | 'balde_tolva'
+export type DietaVariant    = '1_calibre' | '2_calibres'
+
+export const FF_TK_IDS = ['TK1','TK2','TK3','TK4','TK5','TK6'] as const
+export type FfTkId = typeof FF_TK_IDS[number]
+
+export interface FfFeedingPlan {
+  id:               string
+  log_id:           string
+  sobrante_variant: SobranteVariant
+  dieta_variant:    DietaVariant
+  calibre_1:        string | null
+  calibre_2:        string | null
+  calibre_1_pct:    number | null
+  calibre_2_pct:    number | null
+  created_at:       string
+  updated_at:       string
+}
+
+export interface FfFeedingPlanRow {
+  id:                 string
+  plan_id:            string
+  tk_id:              FfTkId
+  sobrante_balde_kg:  number | null
+  sobrante_tolva_kg:  number | null
+  dieta_tolva_kg:     number | null
+  dieta_balde_cal1_kg: number | null
+  dieta_balde_cal2_kg: number | null
+  real_tolva_kg:       number | null
+  real_balde_cal1_kg:  number | null
+  real_balde_cal2_kg:  number | null
+  real_total_kg:       number | null
+}
+
+export interface FfFeedingPlanFull {
+  plan: FfFeedingPlan
+  rows: FfFeedingPlanRow[]
+}
+
+// ── Cell state para el formulario ──────────────────────────
+export interface PlanRowCell {
+  sobrante_balde_kg?:   number
+  sobrante_tolva_kg?:   number
+  dieta_tolva_kg?:      number
+  dieta_balde_cal1_kg?: number
+  dieta_balde_cal2_kg?: number
+}
+
+// ── Cálculos derivados (no se editan) ─────────────────────
+export interface PlanRowComputed {
+  sobrante_total_kg:  number | null
+  dieta_total_kg:     number | null
+  real_tolva_kg:      number | null
+  real_balde_cal1_kg: number | null
+  real_balde_cal2_kg: number | null
+  real_total_kg:      number | null
+}
+
 /* ── FRY — nuevas interfaces ─────────────────────────────── */
 
 /** Una de las hasta 5 tomas de parámetros numéricos por turno */

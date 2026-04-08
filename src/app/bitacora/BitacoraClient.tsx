@@ -23,6 +23,9 @@ import {
 import type { ChecklistConfigItem } from '@/app/dashboard/actions'
 import { generateBitacoraPdf } from '@/lib/generateBitacoraPdf'
 import { time } from 'console'
+import AlimentacionFF     from '@/components/AlimentacionFF'
+import { getFeedingPlan } from '@/app/dashboard/alimentacion-actions'
+import type { FfFeedingPlanFull } from '@/types/index'
 
 /* ── Types ─────────────────────────────────────────── */
 interface Props {
@@ -142,6 +145,11 @@ export default function BitacoraClient({
 
   function goBack() { router.push(`/dashboard?module=${module}&date=${date}`) }
   function goHome()  { router.push(`/dashboard?module=${module}`) }
+
+  /* ── Alimentación FF state ─── */
+  const [showAlimentacion, setShowAlimentacion] = useState(false)
+  const [feedingPlan, setFeedingPlan] = useState<FfFeedingPlanFull | null>(null)
+  const [loadingPlan, setLoadingPlan] = useState(false)
 
   /* ── Clock ─── */
   useEffect(() => {
@@ -264,6 +272,15 @@ export default function BitacoraClient({
       await commitReorder(from, to)
     }
   }
+
+   async function handleOpenAlimentacion() {
+    if (!log) return
+      setLoadingPlan(true)
+      const plan = await getFeedingPlan(log.id)
+      setFeedingPlan(plan)
+      setLoadingPlan(false)
+      setShowAlimentacion(true)
+    }
 
   const activeItems = config.filter(i => i.active)
   const ALL_KEYS    = activeItems.map(i => i.item_key)
@@ -716,6 +733,24 @@ export default function BitacoraClient({
           )}
           {!isEditing && mode !== 'create' && (
             <>
+              {isFF(module) && shift === 'noche' && (
+                  <button
+                    onClick={handleOpenAlimentacion}
+                    disabled={loadingPlan}
+                    className="w-8 h-8 flex items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 active:opacity-60 transition-opacity disabled:opacity-40"
+                    aria-label="Plan de alimentación">
+                    {loadingPlan ? (
+                      <div className="w-4 h-4 rounded-full border-2 border-emerald-200 border-t-emerald-500 animate-spin" />
+                    ) : (
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/>
+                        <rect x="9" y="3" width="6" height="4" rx="1"/>
+                        <line x1="9" y1="12" x2="15" y2="12"/>
+                        <line x1="9" y1="16" x2="13" y2="16"/>
+                      </svg>
+                        )}
+                    </button>
+            )}  
               <button onClick={() => logFull && generateBitacoraPdf(logFull, module, date, shift, config)}
                 className="w-8 h-8 flex items-center justify-center rounded-xl bg-emerald-100 text-emerald-500 active:opacity-60 transition-opacity" aria-label="Descargar PDF">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -1710,6 +1745,17 @@ export default function BitacoraClient({
           </div>
         </div>
       )}
+
+       {showAlimentacion && isFF(module) && shift === 'noche' && log && (
+       <div className="fixed inset-0 z-50 bg-[#F2F2F7] flex flex-col animate-slide-up">
+         <AlimentacionFF
+           logId={log.id}
+           initialData={feedingPlan}
+           onClose={() => setShowAlimentacion(false)}
+         />
+       </div>
+     )}
+
     </div>
   )
 }
