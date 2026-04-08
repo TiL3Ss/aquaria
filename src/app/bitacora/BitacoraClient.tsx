@@ -27,6 +27,7 @@ import AlimentacionFF     from '@/components/AlimentacionFF'
 import { getFeedingPlan } from '@/app/dashboard/alimentacion-actions'
 import type { FfFeedingPlanFull } from '@/types/index'
 
+
 /* ── Types ─────────────────────────────────────────── */
 interface Props {
   logFull:         LogFull | null
@@ -737,19 +738,27 @@ export default function BitacoraClient({
                   <button
                     onClick={handleOpenAlimentacion}
                     disabled={loadingPlan}
-                    className="w-8 h-8 flex items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 active:opacity-60 transition-opacity disabled:opacity-40"
+                    className="w-8 h-8 flex items-center justify-center rounded-xl bg-orange-50 text-orange-600 active:opacity-60 transition-opacity disabled:opacity-40"
                     aria-label="Plan de alimentación">
                     {loadingPlan ? (
-                      <div className="w-4 h-4 rounded-full border-2 border-emerald-200 border-t-emerald-500 animate-spin" />
+                      <div className="w-4 h-4 rounded-full border-2 border-orange-200 border-t-orange-500 animate-spin" />
                     ) : (
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/>
-                        <rect x="9" y="3" width="6" height="4" rx="1"/>
-                        <line x1="9" y1="12" x2="15" y2="12"/>
-                        <line x1="9" y1="16" x2="13" y2="16"/>
+                      <svg
+                        width="15"
+                        height="15"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M3 12s4-6 10-6 8 6 8 6-2 6-8 6-10-6-10-6z" />
+                        <path d="M3 12l-2-2v4l2-2z" />
+                        <circle cx="13" cy="10" r="0.8" fill="currentColor" />
                       </svg>
-                        )}
-                    </button>
+                    )}
+                  </button>
             )}  
               <button onClick={() => logFull && generateBitacoraPdf(logFull, module, date, shift, config)}
                 className="w-8 h-8 flex items-center justify-center rounded-xl bg-emerald-100 text-emerald-500 active:opacity-60 transition-opacity" aria-label="Descargar PDF">
@@ -1751,6 +1760,7 @@ export default function BitacoraClient({
          <AlimentacionFF
            logId={log.id}
            initialData={feedingPlan}
+           date={date}
            onClose={() => setShowAlimentacion(false)}
          />
        </div>
