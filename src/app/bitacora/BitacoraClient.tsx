@@ -961,7 +961,7 @@ export default function BitacoraClient({
                               </svg>
                             )}
                           </button>
-                          <span className={`text-[14px] font-medium leading-tight flex-1 truncate
+                          <span className={`text-[14px] font-medium leading-tight flex-1 break-words min-w-0
                             ${checked.has(item.item_key) && item.active ? 'text-green-800' : 'text-gray-600'}`}>
                             {item.label}
                           </span>
