@@ -97,10 +97,15 @@ export default function DashboardClient({ profile, dbModules }: Props) {
   }
 
   function selectModule(mod: DbModule) {
-    setSelectedModule(mod)
-    setSelectedDay(null)
+  if (mod.slug === 'bodega') {
+    router.push('/bodega')
     setDrawerOpen(false)
+    return
   }
+  setSelectedModule(mod)
+  setSelectedDay(null)
+  setDrawerOpen(false)
+}
 
   function prevMonth() {
     if (month === 0) { setYear(y => y - 1); setMonth(11) }
