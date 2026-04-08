@@ -1156,6 +1156,12 @@ export default function BitacoraClient({
                     <Field label="pH">        {numField('ph_ff',       params?.ph_ff)}</Field>
                     <Field label="Salinidad"> {numField('salinity_ff', params?.salinity_ff, 'ppt')}</Field>
                     <Field label="ORP" className="col-span-2">{numField('orp_ff', params?.orp_ff, 'mV')}</Field>
+                    <Field label="Ingreso de agua" className="col-span-2">
+                      {numField('water_intake', params?.water_intake)}
+                    </Field>
+                    <Field label="Ingreso TK (Pozo)" className="col-span-2">
+                      {numField('pozo_intake_m3h', params?.pozo_intake_m3h, 'm³/h')}
+                    </Field>
                   </>
                 )}
               </div>

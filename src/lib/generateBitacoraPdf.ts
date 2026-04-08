@@ -173,6 +173,8 @@ export function generateBitacoraPdf(
       ['pH',        fmt(p?.ph_ff)],
       ['Salinidad', fmt(p?.salinity_ff, 'ppt')],
       ['ORP',       fmt(p?.orp_ff,      'mV')],
+      ['Ingreso de agua',   fmt(p?.water_intake)],
+      ['Ingreso TK (Pozo)', fmt(p?.pozo_intake_m3h,  'm³/h')],
     ]
   }
 

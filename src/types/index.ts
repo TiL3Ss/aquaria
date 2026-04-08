@@ -57,6 +57,7 @@ export interface LogParameters {
   ph_ff: number | null
   salinity_ff: number | null
   orp_ff: number | null
+  pozo_intake_m3h?: number | null
   // Químicos (ambos)
   bicarbonate_kg: number | null
   chloride_kg: number | null

@@ -434,7 +434,7 @@ export function generateAlimentacionPdf(payload: AlimentacionPdfPayload) {
   <div class="legend">
     <div class="legend-item">
       <span class="legend-dot" style="background:#f59e0b"></span>
-      <span class="legend-text">Sobrante — ingresado manualmente</span>
+      <span class="legend-text">Sobrante — Alimento restante</span>
     </div>
     <div class="legend-item">
       <span class="legend-dot" style="background:#3b82f6"></span>

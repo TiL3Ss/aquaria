@@ -159,8 +159,9 @@ export async function createLog(data: Record<string, unknown>) {
     metabisulfite:      data.metabisulfite      as number | null,
     feeding_type:       data.feeding_type       as string | null,
     feeding_amount:     data.feeding_amount     as number | null,
+    pozo_intake_m3h: data.pozo_intake_m3h as number | null,
   })
-
+  
   // Checklist
   const checklistKeys = data.checklist_keys as string[]
   if (checklistKeys?.length > 0) {
@@ -298,6 +299,7 @@ export async function updateLog(logId: string, data: Record<string, unknown>) {
       metabisulfite:      data.metabisulfite      as number | null,
       feeding_type:       data.feeding_type       as string | null,
       feeding_amount:     data.feeding_amount     as number | null,
+      pozo_intake_m3h: data.pozo_intake_m3h as number | null,
     })
     .eq('log_id', logId)
 
