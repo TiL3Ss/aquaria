@@ -202,6 +202,7 @@ export interface FryTankReading {
   dose_ml:         number | null
   fish_behavior:   FishBehavior | null
   feed_loss:       FeedLoss | null
+  beacon_status:   'on' | 'off' | null
 }
 
 /** Sala de máquinas — 1 registro por turno */

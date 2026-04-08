@@ -260,12 +260,13 @@ export function generateBitacoraPdf(
           (r?.dose_ml         == null || r.dose_ml         === 0)
 
         if (!r || numericAllEmpty) {
-          // Fila colapsada: TK | "Vacío" (colspan 5) | C | A
+          // Fila colapsada: TK | "Vacío" (colspan 5) | C | A | Balizas
           return `<tr style="opacity:0.35">
             <td class="fq-id">${id}</td>
             <td colspan="5" style="text-align:center;font-style:italic;font-size:7.5px;color:#1C1D1E">Vacío</td>
-            <td>${r?.fish_behavior ? (behaviorMap[r.fish_behavior] ?? '—') : '—'}</td>
-            <td>${r?.feed_loss     ? (feedMap[r.feed_loss]         ?? '—') : '—'}</td>
+            <td>${r?.fish_behavior  ? (behaviorMap[r.fish_behavior] ?? '—') : '—'}</td>
+            <td>${r?.feed_loss      ? (feedMap[r.feed_loss]         ?? '—') : '—'}</td>
+            <td>${r?.beacon_status  ? r.beacon_status.toUpperCase()         : '—'}</td>
           </tr>`
         }
 
@@ -278,6 +279,7 @@ export function generateBitacoraPdf(
           <td>${r.dose_ml  != null ? String(r.dose_ml)  : '—'}</td>
           <td>${r.fish_behavior ? (behaviorMap[r.fish_behavior] ?? '—') : '—'}</td>
           <td>${r.feed_loss     ? (feedMap[r.feed_loss]         ?? '—') : '—'}</td>
+          <td>${r.beacon_status  ? r.beacon_status.toUpperCase()         : '—'}</td>
         </tr>`
       }).join('')
       return `<div>
@@ -292,12 +294,12 @@ export function generateBitacoraPdf(
             <tr>
               <th style="text-align:left">TK</th>
               <th>Sat%</th><th>Mg/L</th><th>m³/h</th>
-              <th>Base</th><th>Dosis</th><th>C</th><th>A</th>
+              <th>Base</th><th>Dosis</th><th>C</th><th>A</th><th>Bal</th>
             </tr>
           </thead>
           <tbody>${rows}</tbody>
         </table>
-        <div class="fry-legend">C=Comp.(A/L/R) · A=Alim.(Sí/No/Ay)</div>
+        <div class="fry-legend">C=Comp.(A/L/R) · A=Alim.(Sí/No/Ay) · Bal=Balizas(ON/OFF)</div>
       </div>`
     }
     return `<div class="tk-pair">${slotTable(slotA)}${slotTable(slotB)}</div>`

@@ -65,6 +65,7 @@ type FryTankCell = {
   dose_ml?:         number
   fish_behavior?:   FishBehavior
   feed_loss?:       FeedLoss
+  beacon_status?:   'on' | 'off'
 }
 type FryTankState = Record<string, Record<string, FryTankCell>> // time_slot → id → cell
 
@@ -377,6 +378,7 @@ export default function BitacoraClient({
           dose_ml:         toNum(r.dose_ml),
           fish_behavior:   r.fish_behavior ?? undefined,
           feed_loss:       r.feed_loss     ?? undefined,
+          beacon_status :  r.beacon_status ?? undefined,
         } : {}
       })
     })
@@ -443,8 +445,9 @@ export default function BitacoraClient({
   }
 
   function setTank(ts: string, id: string, field: keyof FryTankCell, value: unknown) {
-    const parsed = typeof value === 'string' && (field === 'fish_behavior' || field === 'feed_loss')
-      ? (value === '' ? undefined : value as FishBehavior | FeedLoss)
+    const isTextField = field === 'fish_behavior' || field === 'feed_loss' || field === 'beacon_status'
+    const parsed = typeof value === 'string' && isTextField
+      ? (value === '' ? undefined : value as FishBehavior | FeedLoss | 'on' | 'off')
       : typeof value === 'string'
         ? (value === '' ? undefined : parseFloat(value))
         : value
@@ -569,9 +572,10 @@ export default function BitacoraClient({
           dose_ml:         cell.dose_ml          ?? null,
           fish_behavior:   cell.fish_behavior    ?? null,
           feed_loss:       cell.feed_loss        ?? null,
+          beacon_status:   cell.beacon_status    ?? null,
         }
         const numericKeys = ['o2_saturation','dissolved_o2','tank_intake_m3h','base_ml','dose_ml']
-        const textKeys    = ['fish_behavior','feed_loss']
+        const textKeys    = ['fish_behavior','feed_loss','beacon_status']
         if (filterEmpty && !hasAnyValue(entry, [...numericKeys,...textKeys])) return
         entries.push(entry)
       })
@@ -1387,6 +1391,7 @@ export default function BitacoraClient({
                       <th className="text-center text-[10px] text-gray-400 font-semibold pb-2 px-1">Dosis</th>
                       <th className="text-center text-[10px] text-gray-400 font-semibold pb-2 px-1">Comp.</th>
                       <th className="text-center text-[10px] text-gray-400 font-semibold pb-2 px-1">Alim.</th>
+                      <th className="text-center text-[10px] text-gray-400 font-semibold pb-2 px-1">Bal.</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1468,6 +1473,19 @@ export default function BitacoraClient({
                               ))}
                             </select>
                           </td>
+                          <td className="px-1 py-1">
+                            <select
+                              value={cell.beacon_status ?? ''}
+                              onChange={e => setTank(currentSlot, id, 'beacon_status', e.target.value as 'on' | 'off' | '')}
+                              disabled={!isEditing}
+                              className="fq-input w-14 text-center text-[11px]"
+                            >
+                              <option value="">—</option>
+                              <option value="on">ON</option>
+                              <option value="off">OFF</option>
+                            </select>
+                          </td>
+                        
                         </tr>
                       )
                     })}
@@ -1477,7 +1495,7 @@ export default function BitacoraClient({
 
               {/* Leyenda comportamiento */}
               <p className="text-[10px] text-gray-400 mt-2">
-                Comp.: A = Activo · L = Letárgico · R = Revisar &nbsp;|&nbsp; Alim.: pérdida de alimento
+                Comp.: A = Activo · L = Letárgico · R = Revisar &nbsp;|&nbsp; Alim.: pérdida de alimento &nbsp;|&nbsp; Bal.: balizas ON/OFF
               </p>
             </Card>
           )}
