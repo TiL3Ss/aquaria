@@ -1,5 +1,4 @@
 // src/app/bodega/page.tsx
-// src/app/bodega/page.tsx
 import { redirect }        from 'next/navigation'
 import { createClient }    from '@/utils/supabase/server'
 import BodegaClient        from './BodegaClient'
@@ -19,11 +18,12 @@ export default async function BodegaPage() {
     .from('profiles').select('id, full_name, role').eq('id', user.id).single()
   if (!profile) redirect('/auth/login')
 
-  const [config, cargoTypes, products, history] = await Promise.all([
+  const [config, cargoTypes, products, history, modulesRes] = await Promise.all([
     getBodegaConfig(),
     getCargoTypes(),
     getBodegaProducts(),
     getBodegaHistory(),
+    supabase.from('modules').select('id, name, slug').eq('active', true).order('name'),
   ])
 
   return (
@@ -33,6 +33,7 @@ export default async function BodegaPage() {
       initialCargoTypes={cargoTypes}
       initialProducts={products}
       initialHistory={history}
+      dbModules={modulesRes.data ?? []}
     />
   )
 }

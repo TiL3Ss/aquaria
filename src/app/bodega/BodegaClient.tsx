@@ -1,5 +1,3 @@
-// src/app/bodega/BodegaClient.tsx
-
 'use client'
 
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
@@ -16,12 +14,15 @@ import {
 } from './actions'
 
 /* ── Types ─────────────────────────────────────────────────── */
+interface DbModule { id: string; name: string; slug: string }
+
 interface Props {
-  profile:          { id: string; full_name: string; role: string }
-  initialConfig:    BodegaConfig | null
+  profile:           { id: string; full_name: string; role: string }
+  initialConfig:     BodegaConfig | null
   initialCargoTypes: CargoType[]
-  initialProducts:  BodegaProduct[]
-  initialHistory:   BodegaHistoryEntry[]
+  initialProducts:   BodegaProduct[]
+  initialHistory:    BodegaHistoryEntry[]
+  dbModules?:        DbModule[]
 }
 
 /* ── Calibre colours ────────────────────────────────────────── */
@@ -72,7 +73,7 @@ function emptyForm() {
    COMPONENT
 ══════════════════════════════════════════════════════════════ */
 export default function BodegaClient({
-  profile, initialConfig, initialCargoTypes, initialProducts, initialHistory,
+  profile, initialConfig, initialCargoTypes, initialProducts, initialHistory, dbModules = [],
 }: Props) {
   const router = useRouter()
 
@@ -86,7 +87,8 @@ export default function BodegaClient({
   const rows = config?.rows ?? 6
 
   /* ── UI state ─── */
-  const [view, setView]               = useState<'main' | 'history' | 'config'>('main')
+  const [view,        setView]        = useState<'main' | 'history' | 'config'>('main')
+  const [drawerOpen,  setDrawerOpen]  = useState(false)
   const [dragEnabled, setDragEnabled] = useState(false)
   const [saving, setSaving]           = useState(false)
 
@@ -359,14 +361,27 @@ export default function BodegaClient({
 
       {/* ══ TOPBAR ══ */}
       <header className="topbar-blur border-b border-black/[0.06] px-3 h-14 flex items-center justify-between sticky top-0 z-30 pt-safe">
-        <button
-          onClick={() => view !== 'main' ? setView('main') : router.push('/dashboard')}
-          className="flex items-center gap-1 text-blue-500 text-[14px] font-medium active:opacity-60 transition-opacity">
-          <svg width="8" height="13" viewBox="0 0 8 13" fill="none">
-            <path d="M7 1L1 6.5L7 12" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-          <span>{view === 'main' ? 'Inicio' : 'Bodega'}</span>
-        </button>
+        {/* Hamburger / back button */}
+        {view !== 'main' ? (
+          <button
+            onClick={() => setView('main')}
+            className="flex items-center gap-1 text-blue-500 text-[14px] font-medium active:opacity-60 transition-opacity">
+            <svg width="8" height="13" viewBox="0 0 8 13" fill="none">
+              <path d="M7 1L1 6.5L7 12" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <span>Bodega</span>
+          </button>
+        ) : (
+          <button
+            onClick={() => setDrawerOpen(true)}
+            className="flex items-center gap-2 active:opacity-60 transition-opacity">
+            <div className="w-8 h-8 bg-blue-500 rounded-[10px] flex items-center justify-center shadow-sm">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
+                <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
+              </svg>
+            </div>
+          </button>
+        )}
 
         <span className="text-[15px] font-bold text-gray-900">
           {view === 'main' ? 'Bodega' : view === 'history' ? 'Historial' : 'Configuración'}
@@ -392,6 +407,57 @@ export default function BodegaClient({
           )}
         </div>
       </header>
+
+      {/* ══ SIDEBAR DRAWER ══ */}
+      {drawerOpen && (
+        <div className="fixed inset-0 z-50 flex">
+          <div className="absolute inset-0 bg-black/30 backdrop-blur-[3px]" onClick={() => setDrawerOpen(false)} />
+          <div className="animate-drawer-in relative bg-white w-72 h-full flex flex-col shadow-2xl pt-safe">
+            <div className="px-5 pt-5 pb-4 border-b border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-500 rounded-2xl flex items-center justify-center shadow-md shadow-blue-200">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                  </svg>
+                </div>
+                <div>
+                  <div className="text-[16px] font-bold text-gray-900">Aquaria</div>
+                  <div className="text-[12px] text-gray-400 truncate max-w-[140px]">{profile.full_name}</div>
+                </div>
+              </div>
+            </div>
+            <nav className="flex-1 overflow-y-auto px-3 py-3">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.12em] px-2 mb-2">Módulos</p>
+              {/* Bodega — active */}
+              <div className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl mb-0.5 bg-blue-50">
+                <span className="w-8 h-8 rounded-[10px] flex items-center justify-center text-[10px] font-bold tracking-wide flex-shrink-0 bg-blue-500 text-white shadow-sm shadow-blue-300">
+                  BOD
+                </span>
+                <span className="text-[15px] font-semibold text-blue-600">Bodega</span>
+                <span className="ml-auto w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center">
+                  <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+                    <polyline points="2,6 5,9 10,3" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </span>
+              </div>
+              {/* Other modules → go to dashboard */}
+              {dbModules.filter(m => m.slug !== 'bodega').map(mod => (
+                <button key={mod.id}
+                  onClick={() => {
+                    setDrawerOpen(false)
+                    router.push(`/dashboard?module=${mod.slug}`)
+                  }}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl mb-0.5 active:bg-gray-100 transition-all active:scale-[0.98]">
+                  <span className="w-8 h-8 rounded-[10px] flex items-center justify-center text-[10px] font-bold tracking-wide flex-shrink-0 bg-gray-100 text-gray-500">
+                    {mod.slug.slice(0, 3).toUpperCase()}
+                  </span>
+                  <span className="text-[15px] font-medium text-gray-700">{mod.name}</span>
+                </button>
+              ))}
+            </nav>
+          </div>
+        </div>
+      )}
 
       {/* ══ MAIN VIEW ══ */}
       {view === 'main' && (
@@ -511,8 +577,8 @@ export default function BodegaClient({
                 onTouchMove={dragEnabled ? onTouchMove : undefined}
                 onTouchEnd={dragEnabled ? onTouchEnd : undefined}>
                 {Array.from({ length: rows }, (_, r) => (
-                  <div key={r} className="flex items-center mb-1 gap-0.5">
-                    <div className="w-5 flex-shrink-0 text-center text-[10px] font-bold text-gray-400">{r + 1}</div>
+                  <div key={r} className="flex items-center mb-1 gap-0.5" style={{ height: `min(calc((100vw - 80px) / ${cols}), 52px)` }}>
+                    <div className="w-5 flex-shrink-0 text-center text-[10px] font-bold text-gray-400 self-center">{r + 1}</div>
                     {Array.from({ length: cols }, (_, c) => {
                       const sec  = getSectionLabel(c, r)
                       const cell = cellMap[sec] ?? []
@@ -525,7 +591,7 @@ export default function BodegaClient({
                       return (
                         <div key={sec}
                           ref={el => { if (el) cellRefs.current.set(sec, el); else cellRefs.current.delete(sec) }}
-                          className={`flex-1 aspect-square rounded-lg transition-all relative overflow-hidden
+                          className={`flex-1 h-full rounded-lg transition-all relative overflow-hidden
                             ${isOver ? 'ring-2 ring-blue-400 scale-[1.05]' : ''}
                             ${isHighlighted ? 'ring-2 ring-yellow-400' : ''}
                             ${cell.length > 0 ? '' : 'bg-gray-50 border border-gray-100'}`}
@@ -666,7 +732,6 @@ export default function BodegaClient({
               <span className="text-[12px] font-semibold">Eliminar</span>
             </button>
           </div>
-          <br />
 
           {/* ── All products list ─── */}
           {!search && !filterCalibre && !filterMedicado && !filterTipo && !filterSeccion && products.length > 0 && (
