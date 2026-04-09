@@ -9,6 +9,8 @@ import type { Shift, Profile } from '@/types'
 import { SHIFT_LABELS, SHIFT_TIMES } from '@/types'
 import { logout } from '@/app/auth/actions'
 import { getLogsForMonth } from './actions'
+import Image from "next/image"
+import libro from "@/IMG/librob.png"
 import { LogOut as Salir} from 'lucide-react';
 
 const MONTHS = [
@@ -141,40 +143,45 @@ export default function DashboardClient({ profile, dbModules }: Props) {
      MODULE PICKER SCREEN
   ══════════════════════════════════════════════════════════ */
   if (showPicker) {
+    const MODULE_ORDER = ['hat-ff', 'fry-1', 'fry-2', 'terraza', 'ongrowing', 'bodega']
+    const sortedModules = [...dbModules].sort((a, b) => {
+      const ai = MODULE_ORDER.indexOf(a.slug)
+      const bi = MODULE_ORDER.indexOf(b.slug)
+      if (ai === -1 && bi === -1) return 0
+      if (ai === -1) return 1
+      if (bi === -1) return -1
+      return ai - bi
+    })
+
     return (
-      <div className="min-h-dvh bg-gray-950 flex flex-col items-center justify-center px-6 py-12 select-none">
+      <div className="min-h-dvh bg-[#F2F2F7] flex flex-col items-center justify-center px-6 py-12 select-none">
 
         {/* Header */}
         <div className="mb-10 text-center">
-          <div className="w-14 h-14 bg-blue-500 rounded-3xl flex items-center justify-center shadow-lg shadow-blue-500/30 mx-auto mb-4">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="white">
-              <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
-            </svg>
+          <div className="w-16 h-16 bg-white rounded-3xl flex items-center justify-center shadow-md mx-auto mb-4">
+            <Image src={libro} alt="Aquaria logo" width={44} height={44} className="object-contain" />
           </div>
-          <h1 className="text-[28px] font-black text-white tracking-tight">Aquaria</h1>
+          <h1 className="text-[28px] font-black text-gray-900 tracking-tight">Aquaria</h1>
           <p className="text-[14px] text-gray-400 mt-1">
-            Bienvenido, <span className="text-gray-200 font-medium">{profile.full_name.split(' ')[0]}</span>
+            Bienvenido, <span className="text-gray-600 font-medium">{profile.full_name.split(' ')[0]}</span>
           </p>
         </div>
 
-        <p className="text-[12px] font-bold text-gray-500 uppercase tracking-[0.15em] mb-5">
+        <p className="text-[12px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-5">
           Selecciona un módulo
         </p>
 
         {/* Module grid */}
         <div className="grid grid-cols-2 gap-3 w-full max-w-sm">
-          {dbModules.map((mod, i) => {
+          {sortedModules.map((mod, i) => {
             const isBodega = mod.slug === 'bodega'
-            // Color accent per slot
             const accents = [
-              'from-blue-600 to-blue-500 shadow-blue-500/25',
-              'from-indigo-600 to-indigo-500 shadow-indigo-500/25',
-              'from-cyan-600 to-cyan-500 shadow-cyan-500/25',
-              'from-violet-600 to-violet-500 shadow-violet-500/25',
-              'from-emerald-600 to-emerald-500 shadow-emerald-500/25',
-              'from-amber-600 to-amber-500 shadow-amber-500/25',
-              'from-orange-600 to-orange-500 shadow-orange-500/25',
-              'from-rose-600 to-rose-500 shadow-rose-500/25',
+              'from-blue-500 to-blue-400 shadow-blue-200',
+              'from-indigo-500 to-indigo-400 shadow-indigo-200',
+              'from-cyan-500 to-cyan-400 shadow-cyan-200',
+              'from-violet-500 to-violet-400 shadow-violet-200',
+              'from-emerald-500 to-emerald-400 shadow-emerald-200',
+              'from-amber-500 to-amber-400 shadow-amber-200',
             ]
             const accent = accents[i % accents.length]
 
@@ -183,9 +190,9 @@ export default function DashboardClient({ profile, dbModules }: Props) {
                 key={mod.id}
                 onClick={() => pickModule(mod)}
                 className={`group relative flex flex-col items-center justify-center gap-3
-                  bg-gray-900 border border-gray-800 rounded-3xl py-7 px-4
+                  bg-white border border-gray-100 rounded-3xl py-7 px-4 card-shadow
                   active:scale-[0.94] transition-all duration-150
-                  hover:border-gray-600 hover:bg-gray-800`}
+                  hover:border-gray-200 hover:shadow-md`}
               >
                 {/* Icon circle */}
                 <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${accent} shadow-lg
@@ -204,13 +211,9 @@ export default function DashboardClient({ profile, dbModules }: Props) {
                 </div>
 
                 {/* Name */}
-                <span className="text-[14px] font-bold text-white leading-tight text-center">
+                <span className="text-[14px] font-bold text-gray-800 leading-tight text-center">
                   {mod.name}
                 </span>
-
-                {/* Subtle shine on hover */}
-                <div className="absolute inset-0 rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity
-                  bg-gradient-to-b from-white/[0.03] to-transparent pointer-events-none" />
               </button>
             )
           })}
@@ -220,7 +223,7 @@ export default function DashboardClient({ profile, dbModules }: Props) {
         <div className="mt-10">
           <form action={logout}>
             <button type="submit"
-              className="flex items-center gap-2 text-gray-500 text-[13px] font-medium active:text-gray-300 transition-colors">
+              className="flex items-center gap-2 text-gray-400 text-[13px] font-medium active:text-gray-600 transition-colors">
               <Salir size={14} />
               Cerrar sesión
             </button>
