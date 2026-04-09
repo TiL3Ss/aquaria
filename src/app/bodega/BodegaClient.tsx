@@ -578,42 +578,88 @@ export default function BodegaClient({
                               <span className="text-[7px] text-gray-300 font-mono">{sec}</span>
                             </div>
                           ) : (
-                            /* Stack de niveles — columnas horizontales apiladas */
-                            <div className="w-full h-full flex flex-col">
-                              {cell.map((prod) => {
-                                const col = getCalibreColor(prod.calibre)
-                                return (
-                                  <div key={prod.id}
-                                    draggable={dragEnabled}
-                                    onDragStart={dragEnabled ? () => onDragStart(prod.id) : undefined}
-                                    onDragEnd={dragEnabled ? onDragEnd : undefined}
-                                    onTouchStart={dragEnabled ? e => onTouchStart(e, prod.id) : undefined}
-                                    className={`${col.bg} ${col.text} flex-1 flex items-center justify-center gap-px
-                                      select-none transition-opacity active:opacity-70 min-h-0
-                                      ${dragEnabled ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}
-                                      ${prod.seccion_half ? 'opacity-75' : ''}`}
-                                    style={{ minHeight: 0 }}
-                                    title={`${prod.nombre} — ${sec}-${toRoman(prod.nivel)}`}
-                                  >
-                                    {/* Número romano del nivel */}
-                                    <span className="text-[5px] font-black opacity-70 leading-none flex-shrink-0">
-                                      {toRoman(prod.nivel)}
-                                    </span>
-                                    {/* Dot de calibre */}
-                                    <span className="text-[5px] font-bold leading-none truncate">
-                                      {prod.calibre}
-                                    </span>
-                                    {prod.medicado && (
-                                      <span className="text-[5px] font-black leading-none opacity-80">✚</span>
-                                    )}
-                                  </div>
-                                )
-                              })}
-                              {/* Slots vacíos en gris muy suave para mostrar capacidad */}
-                              {cell.length < MAX_NIVELES && Array.from({ length: MAX_NIVELES - cell.length }, (_, i) => (
-                                <div key={`empty-${i}`} className="flex-1 bg-gray-100 min-h-0" style={{ minHeight: 0 }} />
-                              ))}
-                            </div>
+                            /* Stack de niveles — se divide según niveles ocupados */
+<div className="w-full h-full flex flex-col">
+  {(() => {
+    // Construir array de 5 slots, cada uno con su producto o null
+    const slots: (BodegaProduct | null)[] = [null, null, null, null, null]
+    cell.forEach(prod => { slots[prod.nivel - 1] = prod })
+
+    const hasGaps = (() => {
+      const occupied = slots.map(s => s !== null)
+      const first = occupied.indexOf(true)
+      const last  = occupied.lastIndexOf(true)
+      if (first === -1) return false
+      return occupied.slice(first, last + 1).some(v => !v)
+    })()
+
+    if (hasGaps || cell.length === MAX_NIVELES) {
+      // Mostrar los 5 slots siempre (llena o con huecos)
+      return slots.map((prod, i) => {
+        if (prod) {
+          const col = getCalibreColor(prod.calibre)
+          return (
+            <div key={prod.id}
+              draggable={dragEnabled}
+              onDragStart={dragEnabled ? () => onDragStart(prod.id) : undefined}
+              onDragEnd={dragEnabled ? onDragEnd : undefined}
+              onTouchStart={dragEnabled ? e => onTouchStart(e, prod.id) : undefined}
+              className={`${col.bg} ${col.text} flex-1 flex items-center justify-center gap-px
+                select-none transition-opacity active:opacity-70 min-h-0
+                ${dragEnabled ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}
+                ${prod.seccion_half ? 'opacity-75' : ''}`}
+              style={{ minHeight: 0 }}
+              title={`${prod.nombre} — ${sec}-${toRoman(prod.nivel)}`}
+            >
+              <span className="text-[5px] font-black opacity-70 leading-none flex-shrink-0">
+                {toRoman(prod.nivel)}
+              </span>
+              <span className="text-[5px] font-bold leading-none truncate">
+                {prod.calibre}
+              </span>
+              {prod.medicado && (
+                <span className="text-[5px] font-black leading-none opacity-80">✚</span>
+              )}
+            </div>
+          )
+        } else {
+          return (
+            <div key={`empty-${i}`} className="flex-1 bg-gray-100 min-h-0" style={{ minHeight: 0 }} />
+          )
+        }
+      })
+    } else {
+      // Sin huecos: dividir en tantas partes como productos haya
+      return cell.map((prod) => {
+        const col = getCalibreColor(prod.calibre)
+        return (
+          <div key={prod.id}
+            draggable={dragEnabled}
+                            onDragStart={dragEnabled ? () => onDragStart(prod.id) : undefined}
+                            onDragEnd={dragEnabled ? onDragEnd : undefined}
+                            onTouchStart={dragEnabled ? e => onTouchStart(e, prod.id) : undefined}
+                            className={`${col.bg} ${col.text} flex-1 flex items-center justify-center gap-px
+                              select-none transition-opacity active:opacity-70 min-h-0
+                              ${dragEnabled ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}
+                              ${prod.seccion_half ? 'opacity-75' : ''}`}
+                            style={{ minHeight: 0 }}
+                            title={`${prod.nombre} — ${sec}-${toRoman(prod.nivel)}`}
+                          >
+                            <span className="text-[5px] font-black opacity-70 leading-none flex-shrink-0">
+                              {toRoman(prod.nivel)}
+                            </span>
+                            <span className="text-[5px] font-bold leading-none truncate">
+                              {prod.calibre}
+                            </span>
+                            {prod.medicado && (
+                              <span className="text-[5px] font-black leading-none opacity-80">✚</span>
+                            )}
+                          </div>
+                                  )
+                                })
+                              }
+                            })()}
+                          </div>
                           )}
                         </div>
                       )
