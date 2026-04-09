@@ -12,8 +12,8 @@ import {
   createProduct, updateProduct, deleteProduct, moveProduct,
   getBodegaHistory,
   updateHistoryEntry, deleteHistoryEntry,
-  toRoman,
 } from './actions'
+import {toRoman} from './utils'
 
 /* ── Types ─────────────────────────────────────────────────── */
 interface DbModule { id: string; name: string; slug: string }

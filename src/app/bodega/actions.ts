@@ -3,6 +3,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient }   from '@/utils/supabase/server'
+import { toRoman }         from './utils'
 
 /* ── Types ─────────────────────────────────────────────────── */
 
@@ -356,7 +357,3 @@ export async function deleteHistoryEntry(id: string): Promise<{ error?: string }
   return {}
 }
 
-/* ── Utils ──────────────────────────────────────────────────── */
-export function toRoman(n: number): string {
-  return ['I','II','III','IV','V'][n - 1] ?? String(n)
-}
