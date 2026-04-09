@@ -3,6 +3,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import type { ReactNode } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import type { Shift, Profile } from '@/types'
 import { SHIFT_LABELS, SHIFT_TIMES } from '@/types'
@@ -26,6 +27,16 @@ const SHIFT_STYLE: Record<Shift, ShiftStyle> = {
   tarde: { headerBg:'bg-orange-50', dotBg:'bg-orange-400', labelColor:'text-orange-700', emptyDot:'bg-orange-200' },
 }
 
+// Icon map per slug — fallback to initials
+const MODULE_ICONS: Record<string, ReactNode> = {
+  bodega: (
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+      <polyline points="9 22 9 12 15 12 15 22"/>
+    </svg>
+  ),
+}
+
 interface DbModule { id: string; name: string; slug: string }
 interface Props     { profile: Profile; dbModules: DbModule[] }
 
@@ -35,26 +46,22 @@ export default function DashboardClient({ profile, dbModules }: Props) {
   const today        = new Date()
 
   /* ── Restore state from URL params (back navigation from bitácora) ── */
-  const backDate   = searchParams.get('date')    // e.g. "2025-03-15"
-  const backModule = searchParams.get('module')  // e.g. "hat"
+  const backDate   = searchParams.get('date')
+  const backModule = searchParams.get('module')
 
-  const initialModule = backModule
-    ? (dbModules.find(m => m.slug === backModule) ?? dbModules[0])
-    : (dbModules[0] ?? { id:'', name:'HAT', slug:'hat' })
-
-  const initialDay = backDate
-    ? parseInt(backDate.split('-')[2], 10)
+  const moduleFromUrl = backModule
+    ? dbModules.find(m => m.slug === backModule) ?? null
     : null
 
-  const initialYear = backDate
-    ? parseInt(backDate.split('-')[0], 10)
-    : today.getFullYear()
+  const initialDay = backDate ? parseInt(backDate.split('-')[2], 10) : null
+  const initialYear  = backDate ? parseInt(backDate.split('-')[0], 10) : today.getFullYear()
+  const initialMonth = backDate ? parseInt(backDate.split('-')[1], 10) - 1 : today.getMonth()
 
-  const initialMonth = backDate
-    ? parseInt(backDate.split('-')[1], 10) - 1   // 0-indexed
-    : today.getMonth()
-
-  const [selectedModule, setSelectedModule] = useState<DbModule>(initialModule)
+  // Show picker unless we came back from a bitácora (URL has module param)
+  const [showPicker,     setShowPicker]     = useState<boolean>(!moduleFromUrl)
+  const [selectedModule, setSelectedModule] = useState<DbModule>(
+    moduleFromUrl ?? dbModules[0] ?? { id:'', name:'', slug:'' }
+  )
   const [year,           setYear]           = useState(initialYear)
   const [month,          setMonth]          = useState(initialMonth)
   const [selectedDay,    setSelectedDay]    = useState<number | null>(initialDay)
@@ -62,6 +69,16 @@ export default function DashboardClient({ profile, dbModules }: Props) {
   const [loadingLogs,    setLoadingLogs]    = useState(false)
   const [clock,          setClock]          = useState('')
   const [drawerOpen,     setDrawerOpen]     = useState(false)
+
+  /* ── Pick module from selection screen ── */
+  function pickModule(mod: DbModule) {
+    if (mod.slug === 'bodega') {
+      router.push('/bodega')
+      return
+    }
+    setSelectedModule(mod)
+    setShowPicker(false)
+  }
 
   /* ── Clock ─── */
   useEffect(() => {
@@ -73,11 +90,12 @@ export default function DashboardClient({ profile, dbModules }: Props) {
 
   /* ── Load logs map ─── */
   const loadLogs = useCallback(() => {
+    if (showPicker) return
     setLoadingLogs(true)
     getLogsForMonth(selectedModule.slug, year, month + 1)
       .then(setLogsMap)
       .finally(() => setLoadingLogs(false))
-  }, [selectedModule, year, month])
+  }, [selectedModule, year, month, showPicker])
 
   useEffect(() => { loadLogs() }, [loadLogs])
 
@@ -92,20 +110,19 @@ export default function DashboardClient({ profile, dbModules }: Props) {
 
   function openLog(shift: Shift, mode: 'view' | 'create') {
     const ds = dateStr(selectedDay!)
-    // Incluye date y module en la URL para poder restaurar estado al volver
     router.push(`/bitacora?module=${selectedModule.slug}&date=${ds}&shift=${shift}&mode=${mode}`)
   }
 
   function selectModule(mod: DbModule) {
-  if (mod.slug === 'bodega') {
-    router.push('/bodega')
+    if (mod.slug === 'bodega') {
+      router.push('/bodega')
+      setDrawerOpen(false)
+      return
+    }
+    setSelectedModule(mod)
+    setSelectedDay(null)
     setDrawerOpen(false)
-    return
   }
-  setSelectedModule(mod)
-  setSelectedDay(null)
-  setDrawerOpen(false)
-}
 
   function prevMonth() {
     if (month === 0) { setYear(y => y - 1); setMonth(11) }
@@ -120,7 +137,100 @@ export default function DashboardClient({ profile, dbModules }: Props) {
 
   const initials = profile.full_name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase()
 
-  /* ── Render ─── */
+  /* ══════════════════════════════════════════════════════════
+     MODULE PICKER SCREEN
+  ══════════════════════════════════════════════════════════ */
+  if (showPicker) {
+    return (
+      <div className="min-h-dvh bg-gray-950 flex flex-col items-center justify-center px-6 py-12 select-none">
+
+        {/* Header */}
+        <div className="mb-10 text-center">
+          <div className="w-14 h-14 bg-blue-500 rounded-3xl flex items-center justify-center shadow-lg shadow-blue-500/30 mx-auto mb-4">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="white">
+              <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+            </svg>
+          </div>
+          <h1 className="text-[28px] font-black text-white tracking-tight">Aquaria</h1>
+          <p className="text-[14px] text-gray-400 mt-1">
+            Bienvenido, <span className="text-gray-200 font-medium">{profile.full_name.split(' ')[0]}</span>
+          </p>
+        </div>
+
+        <p className="text-[12px] font-bold text-gray-500 uppercase tracking-[0.15em] mb-5">
+          Selecciona un módulo
+        </p>
+
+        {/* Module grid */}
+        <div className="grid grid-cols-2 gap-3 w-full max-w-sm">
+          {dbModules.map((mod, i) => {
+            const isBodega = mod.slug === 'bodega'
+            // Color accent per slot
+            const accents = [
+              'from-blue-600 to-blue-500 shadow-blue-500/25',
+              'from-indigo-600 to-indigo-500 shadow-indigo-500/25',
+              'from-cyan-600 to-cyan-500 shadow-cyan-500/25',
+              'from-violet-600 to-violet-500 shadow-violet-500/25',
+              'from-emerald-600 to-emerald-500 shadow-emerald-500/25',
+              'from-amber-600 to-amber-500 shadow-amber-500/25',
+              'from-orange-600 to-orange-500 shadow-orange-500/25',
+              'from-rose-600 to-rose-500 shadow-rose-500/25',
+            ]
+            const accent = accents[i % accents.length]
+
+            return (
+              <button
+                key={mod.id}
+                onClick={() => pickModule(mod)}
+                className={`group relative flex flex-col items-center justify-center gap-3
+                  bg-gray-900 border border-gray-800 rounded-3xl py-7 px-4
+                  active:scale-[0.94] transition-all duration-150
+                  hover:border-gray-600 hover:bg-gray-800`}
+              >
+                {/* Icon circle */}
+                <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${accent} shadow-lg
+                  flex items-center justify-center text-white
+                  group-active:scale-90 transition-transform duration-150`}>
+                  {isBodega ? (
+                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+                      <polyline points="9 22 9 12 15 12 15 22"/>
+                    </svg>
+                  ) : (
+                    <span className="text-[18px] font-black tracking-tight">
+                      {mod.slug.slice(0, 3).toUpperCase()}
+                    </span>
+                  )}
+                </div>
+
+                {/* Name */}
+                <span className="text-[14px] font-bold text-white leading-tight text-center">
+                  {mod.name}
+                </span>
+
+                {/* Subtle shine on hover */}
+                <div className="absolute inset-0 rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity
+                  bg-gradient-to-b from-white/[0.03] to-transparent pointer-events-none" />
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Logout at bottom */}
+        <div className="mt-10">
+          <form action={logout}>
+            <button type="submit"
+              className="flex items-center gap-2 text-gray-500 text-[13px] font-medium active:text-gray-300 transition-colors">
+              <Salir size={14} />
+              Cerrar sesión
+            </button>
+          </form>
+        </div>
+      </div>
+    )
+  }
+
+  /* ── Render normal dashboard ─── */
   return (
     <div className="min-h-dvh bg-[#F2F2F7] flex flex-col select-none">
 
@@ -179,7 +289,7 @@ export default function DashboardClient({ profile, dbModules }: Props) {
             <nav className="flex-1 overflow-y-auto px-3 py-3">
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.12em] px-2 mb-2">Módulos</p>
               {dbModules.map(mod => {
-                const active = selectedModule.id === mod.id
+                const active = selectedModule.id === mod.id && mod.slug !== 'bodega'
                 return (
                   <button key={mod.id} onClick={() => selectModule(mod)}
                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl mb-0.5 transition-all active:scale-[0.98]
@@ -203,6 +313,12 @@ export default function DashboardClient({ profile, dbModules }: Props) {
               })}
             </nav>
             <div className="px-4 py-4 border-t border-gray-100 pb-safe">
+              {/* Back to picker */}
+              <button
+                onClick={() => { setDrawerOpen(false); setShowPicker(true); setSelectedDay(null) }}
+                className="w-full py-2.5 mb-2 rounded-2xl bg-blue-50 text-blue-600 text-[13px] font-semibold active:bg-blue-100 transition-colors">
+                Cambiar módulo
+              </button>
               <form action={logout}>
                 <button type="submit" className="w-full py-3 rounded-2xl bg-gray-100 text-gray-600 text-[14px] font-semibold active:bg-gray-200 transition-colors">
                   Cerrar sesión
