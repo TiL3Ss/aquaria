@@ -1,5 +1,4 @@
 // src/app/bodega/actions.ts
-
 'use server'
 
 import { revalidatePath } from 'next/cache'
@@ -28,6 +27,7 @@ export interface BodegaProduct {
   cargo_type_id: string | null
   ubicacion:     string | null
   seccion:       string
+  nivel:         number        // 1–5
   seccion_half:  boolean
   active:        boolean
   created_by:    string | null
@@ -119,7 +119,6 @@ export async function updateCargoType(
 
 export async function deleteCargoType(id: string): Promise<{ error?: string }> {
   const supabase = await createClient()
-  // Verificar que no haya productos usando este tipo
   const { count } = await supabase
     .from('bodega_products').select('id', { count: 'exact', head: true })
     .eq('cargo_type_id', id).eq('active', true)
@@ -140,6 +139,7 @@ export async function getBodegaProducts(): Promise<BodegaProduct[]> {
     .select('*, cargo_type:bodega_cargo_types(*), creator:profiles!created_by(full_name)')
     .eq('active', true)
     .order('seccion')
+    .order('nivel')
   return (data ?? []) as BodegaProduct[]
 }
 
@@ -151,11 +151,22 @@ export async function createProduct(payload: {
   cargo_type_id: string | null
   ubicacion:     string | null
   seccion:       string
+  nivel:         number
   seccion_half:  boolean
 }): Promise<{ error?: string; data?: BodegaProduct }> {
   const supabase = await createClient()
   const user = await getCurrentUser()
   if (!user) return { error: 'No autenticado' }
+
+  // Verificar que el slot seccion+nivel esté libre
+  const { count } = await supabase
+    .from('bodega_products')
+    .select('id', { count: 'exact', head: true })
+    .eq('seccion', payload.seccion)
+    .eq('nivel', payload.nivel)
+    .eq('active', true)
+  if (count && count > 0)
+    return { error: `El nivel ${toRoman(payload.nivel)} de la sección ${payload.seccion} ya está ocupado.` }
 
   const { data, error } = await supabase
     .from('bodega_products')
@@ -165,7 +176,6 @@ export async function createProduct(payload: {
 
   if (error) return { error: error.message }
 
-  // Historial
   await supabase.from('bodega_history').insert({
     product_id:   data.id,
     product_name: data.nombre,
@@ -189,6 +199,7 @@ export async function updateProduct(
     cargo_type_id: string | null
     ubicacion:     string | null
     seccion:       string
+    nivel:         number
     seccion_half:  boolean
   }>,
   oldProduct: BodegaProduct,
@@ -197,6 +208,21 @@ export async function updateProduct(
   const user = await getCurrentUser()
   if (!user) return { error: 'No autenticado' }
 
+  // Si cambia seccion o nivel, verificar que el destino esté libre
+  const newSeccion = payload.seccion ?? oldProduct.seccion
+  const newNivel   = payload.nivel   ?? oldProduct.nivel
+  if (newSeccion !== oldProduct.seccion || newNivel !== oldProduct.nivel) {
+    const { count } = await supabase
+      .from('bodega_products')
+      .select('id', { count: 'exact', head: true })
+      .eq('seccion', newSeccion)
+      .eq('nivel', newNivel)
+      .eq('active', true)
+      .neq('id', id)
+    if (count && count > 0)
+      return { error: `El nivel ${toRoman(newNivel)} de ${newSeccion} ya está ocupado.` }
+  }
+
   const { error } = await supabase
     .from('bodega_products')
     .update({ ...payload, updated_at: new Date().toISOString() })
@@ -204,7 +230,6 @@ export async function updateProduct(
 
   if (error) return { error: error.message }
 
-  // Calcular cambios para el historial
   const changes: Record<string, { from: unknown; to: unknown }> = {}
   for (const key of Object.keys(payload) as (keyof typeof payload)[]) {
     const oldVal = oldProduct[key as keyof BodegaProduct]
@@ -235,7 +260,6 @@ export async function deleteProduct(
   const user = await getCurrentUser()
   if (!user) return { error: 'No autenticado' }
 
-  // Soft delete
   const { error } = await supabase
     .from('bodega_products')
     .update({ active: false, updated_at: new Date().toISOString() })
@@ -259,15 +283,27 @@ export async function deleteProduct(
 export async function moveProduct(
   id: string,
   seccion: string,
+  nivel: number,
   oldProduct: BodegaProduct,
 ): Promise<{ error?: string }> {
   const supabase = await createClient()
   const user = await getCurrentUser()
   if (!user) return { error: 'No autenticado' }
 
+  // Verificar que destino esté libre
+  const { count } = await supabase
+    .from('bodega_products')
+    .select('id', { count: 'exact', head: true })
+    .eq('seccion', seccion)
+    .eq('nivel', nivel)
+    .eq('active', true)
+    .neq('id', id)
+  if (count && count > 0)
+    return { error: `El nivel ${toRoman(nivel)} de ${seccion} ya está ocupado.` }
+
   const { error } = await supabase
     .from('bodega_products')
-    .update({ seccion, updated_at: new Date().toISOString() })
+    .update({ seccion, nivel, updated_at: new Date().toISOString() })
     .eq('id', id)
 
   if (error) return { error: error.message }
@@ -276,9 +312,12 @@ export async function moveProduct(
     product_id:   id,
     product_name: oldProduct.nombre,
     action:       'update',
-    changes:      { seccion: { from: oldProduct.seccion, to: seccion } },
-    user_id:      user.id,
-    user_name:    user.full_name,
+    changes:      {
+      seccion: { from: oldProduct.seccion, to: seccion },
+      nivel:   { from: oldProduct.nivel,   to: nivel   },
+    },
+    user_id:   user.id,
+    user_name: user.full_name,
   })
 
   revalidatePath('/bodega')
@@ -315,4 +354,9 @@ export async function deleteHistoryEntry(id: string): Promise<{ error?: string }
   if (error) return { error: error.message }
   revalidatePath('/bodega')
   return {}
+}
+
+/* ── Utils ──────────────────────────────────────────────────── */
+export function toRoman(n: number): string {
+  return ['I','II','III','IV','V'][n - 1] ?? String(n)
 }
