@@ -33,8 +33,9 @@ const SHIFT_STYLE: Record<Shift, ShiftStyle> = {
 const MODULE_ICONS: Record<string, ReactNode> = {
   bodega: (
     <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
-      <polyline points="9 22 9 12 15 12 15 22"/>
+      <rect x="3" y="7" width="18" height="13" rx="2" />
+      <path d="M3 7l9-4 9 4" />
+      <path d="M12 3v4" />
     </svg>
   ),
 }
@@ -143,7 +144,7 @@ export default function DashboardClient({ profile, dbModules }: Props) {
      MODULE PICKER SCREEN
   ══════════════════════════════════════════════════════════ */
   if (showPicker) {
-    const MODULE_ORDER = ['hat-ff', 'fry-1', 'fry-2', 'terraza', 'ongrowing', 'bodega']
+    const MODULE_ORDER = ['hat', 'ff', 'fry1', 'fry2', 'terraza', 'ongrowing', 'bodega']
     const sortedModules = [...dbModules].sort((a, b) => {
       const ai = MODULE_ORDER.indexOf(a.slug)
       const bi = MODULE_ORDER.indexOf(b.slug)
@@ -158,7 +159,7 @@ export default function DashboardClient({ profile, dbModules }: Props) {
 
         {/* Header */}
         <div className="mb-10 text-center">
-          <div className="w-16 h-16 bg-white rounded-3xl flex items-center justify-center shadow-md mx-auto mb-4">
+          <div className="w-16 h-16 bg-black/90 rounded-3xl flex items-center justify-center shadow-md mx-auto mb-4">
             <Image src={libro} alt="Aquaria logo" width={44} height={44} className="object-contain" />
           </div>
           <h1 className="text-[28px] font-black text-gray-900 tracking-tight">Aquaria</h1>
