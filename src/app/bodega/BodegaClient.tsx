@@ -577,8 +577,8 @@ export default function BodegaClient({
                 onTouchMove={dragEnabled ? onTouchMove : undefined}
                 onTouchEnd={dragEnabled ? onTouchEnd : undefined}>
                 {Array.from({ length: rows }, (_, r) => (
-                  <div key={r} className="flex items-center mb-1 gap-0.5" style={{ height: `min(calc((100vw - 80px) / ${cols}), 52px)` }}>
-                    <div className="w-5 flex-shrink-0 text-center text-[10px] font-bold text-gray-400 self-center">{r + 1}</div>
+                  <div key={r} className="flex items-center mb-1 gap-0.5">
+                    <div className="w-5 flex-shrink-0 text-center text-[10px] font-bold text-gray-400">{r + 1}</div>
                     {Array.from({ length: cols }, (_, c) => {
                       const sec  = getSectionLabel(c, r)
                       const cell = cellMap[sec] ?? []
@@ -591,7 +591,7 @@ export default function BodegaClient({
                       return (
                         <div key={sec}
                           ref={el => { if (el) cellRefs.current.set(sec, el); else cellRefs.current.delete(sec) }}
-                          className={`flex-1 h-full rounded-lg transition-all relative overflow-hidden
+                          className={`flex-1 aspect-square rounded-lg transition-all relative overflow-hidden
                             ${isOver ? 'ring-2 ring-blue-400 scale-[1.05]' : ''}
                             ${isHighlighted ? 'ring-2 ring-yellow-400' : ''}
                             ${cell.length > 0 ? '' : 'bg-gray-50 border border-gray-100'}`}
@@ -1065,53 +1065,56 @@ export default function BodegaClient({
 }
 
 /* ══════════════════════════════════════════════════════════════
-   GridBorder — SVG border with door cut-outs bottom-right
+   GridBorder — SVG border on desktop, S labels on mobile
 ══════════════════════════════════════════════════════════════ */
 function GridBorder({ cols, rows }: { cols: number; rows: number }) {
-  // Cell size approx (we use percentage in the parent)
-  // Doors: bottom edge cut at 65%-85% and right edge cut at 65%-85%
-  const r = 12 // border-radius in px
+  const r = 12
 
   return (
-    <div className="absolute inset-0 pointer-events-none" aria-hidden>
-      <svg width="100%" height="100%" className="absolute inset-0 overflow-visible">
-        <defs>
-          <style>{`
-            .bodega-border {
-              fill: none;
-              stroke: #d1d5db;
-              stroke-width: 2;
-            }
-          `}</style>
-        </defs>
-        {/* Top edge full */}
-        <line className="bodega-border" x1={r} y1="1" x2="calc(100% - 1px)" y2="1" />
-        {/* Right edge top half (to 60%) */}
-        <line className="bodega-border" x1="calc(100% - 1px)" y1="1" x2="calc(100% - 1px)" y2="57%" />
-        {/* Right edge door gap 60%-80% — skip (door 1) */}
-        {/* Right edge 80%-100% */}
-        <line className="bodega-border" x1="calc(100% - 1px)" y1="80%" x2="calc(100% - 1px)" y2="calc(100% - 1px)" />
-        {/* Bottom edge left portion (0-55%) */}
-        <line className="bodega-border" x1={r} y1="calc(100% - 1px)" x2="55%" y2="calc(100% - 1px)" />
-        {/* Bottom edge door gap 55%-75% — skip (door 2) */}
-        {/* Bottom edge 75%-100% */}
-        <line className="bodega-border" x1="75%" y1="calc(100% - 1px)" x2="calc(100% - 1px)" y2="calc(100% - 1px)" />
-        {/* Left edge full */}
-        <line className="bodega-border" x1="1" y1={r} x2="1" y2="calc(100% - 1px)" />
-        {/* Top-left corner arc */}
-        <path className="bodega-border" d={`M 1 ${r} Q 1 1 ${r} 1`} />
-        {/* Bottom-left corner arc */}
-        <path className="bodega-border" d={`M 1 calc(100% - ${r}px) Q 1 calc(100% - 1px) ${r} calc(100% - 1px)`} />
-        {/* Door indicators: small arrows */}
-        {/* Bottom door arrow */}
-        <path className="bodega-border" stroke="#9ca3af" strokeWidth="1.5" d="M 60% calc(100% + 6px) L 63% calc(100% + 2px) L 66% calc(100% + 6px)" />
-        {/* Right door arrow */}
-        <path className="bodega-border" stroke="#9ca3af" strokeWidth="1.5" d="M calc(100% + 6px) 63% L calc(100% + 2px) 66% L calc(100% + 6px) 69%" />
-        {/* Door labels */}
-        <text x="62%" y="calc(100% + 14px)" textAnchor="middle" className="text-[8px]" fill="#9ca3af" fontSize="8">Puerta</text>
-        <text x="calc(100% + 8px)" y="67%" textAnchor="start" className="text-[8px]" fill="#9ca3af" fontSize="8" transform={`rotate(90, calc(100% + 8px), 67%)`}>Puerta</text>
-      </svg>
-    </div>
+    <>
+      {/* ── Desktop: full SVG border with door cut-outs ── */}
+      <div className="absolute inset-0 pointer-events-none hidden sm:block" aria-hidden>
+        <svg width="100%" height="100%" className="absolute inset-0 overflow-visible">
+          <defs>
+            <style>{`
+              .bodega-border {
+                fill: none;
+                stroke: #d1d5db;
+                stroke-width: 2;
+              }
+            `}</style>
+          </defs>
+          <line className="bodega-border" x1={r} y1="1" x2="calc(100% - 1px)" y2="1" />
+          <line className="bodega-border" x1="calc(100% - 1px)" y1="1" x2="calc(100% - 1px)" y2="57%" />
+          <line className="bodega-border" x1="calc(100% - 1px)" y1="80%" x2="calc(100% - 1px)" y2="calc(100% - 1px)" />
+          <line className="bodega-border" x1={r} y1="calc(100% - 1px)" x2="55%" y2="calc(100% - 1px)" />
+          <line className="bodega-border" x1="75%" y1="calc(100% - 1px)" x2="calc(100% - 1px)" y2="calc(100% - 1px)" />
+          <line className="bodega-border" x1="1" y1={r} x2="1" y2="calc(100% - 1px)" />
+          <path className="bodega-border" d={`M 1 ${r} Q 1 1 ${r} 1`} />
+          <path className="bodega-border" d={`M 1 calc(100% - ${r}px) Q 1 calc(100% - 1px) ${r} calc(100% - 1px)`} />
+          <path className="bodega-border" stroke="#9ca3af" strokeWidth="1.5" d="M 60% calc(100% + 6px) L 63% calc(100% + 2px) L 66% calc(100% + 6px)" />
+          <path className="bodega-border" stroke="#9ca3af" strokeWidth="1.5" d="M calc(100% + 6px) 63% L calc(100% + 2px) 66% L calc(100% + 6px) 69%" />
+          <text x="62%" y="calc(100% + 14px)" textAnchor="middle" fill="#9ca3af" fontSize="8">Puerta</text>
+          <text x="calc(100% + 8px)" y="67%" textAnchor="start" fill="#9ca3af" fontSize="8" transform={`rotate(90, calc(100% + 8px), 67%)`}>Puerta</text>
+        </svg>
+      </div>
+
+      {/* ── Mobile: two "S" exit labels, no border ── */}
+      {/* Bottom-right corner: 15% margin from each edge */}
+      <div
+        className="absolute pointer-events-none sm:hidden flex items-center justify-center"
+        aria-label="Salida"
+        style={{ bottom: '15%', right: '15%', width: 18, height: 18 }}>
+        <span className="text-[10px] font-black text-gray-400 leading-none">S</span>
+      </div>
+      {/* Right-side bottom: 15% margin from bottom, flush to right */}
+      <div
+        className="absolute pointer-events-none sm:hidden flex items-center justify-center"
+        aria-label="Salida"
+        style={{ bottom: '15%', right: 0, width: 18, height: 18 }}>
+        <span className="text-[10px] font-black text-gray-400 leading-none rotate-90 inline-block">S</span>
+      </div>
+    </>
   )
 }
 
