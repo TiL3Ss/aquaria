@@ -124,11 +124,58 @@ export default function BodegaClient({
 
   // Drag
   const dragProductId = useRef<string | null>(null)
-  const [dragOver,    setDragOver]    = useState<string | null>(null)
+  const dragOverRef   = useRef<string | null>(null)
+  const [dragOver, setDragOver] = useState<string | null>(null)
+  useEffect(() => { dragOverRef.current = dragOver }, [dragOver])
   const cellRefs      = useRef<Map<string, HTMLDivElement>>(new Map())
 
   const isEmpty = products.length === 0
   useEffect(() => { if (isEmpty) setDragEnabled(false) }, [isEmpty])
+
+  useEffect(() => {
+  if (!dragEnabled) return
+
+  const handleMove = (e: TouchEvent) => {
+    if (!dragProductId.current) return
+    e.preventDefault()
+    const touch = e.touches[0]
+    let found: string | null = null
+    cellRefs.current.forEach((el, sec) => {
+      const r = el.getBoundingClientRect()
+      if (
+        touch.clientX >= r.left && touch.clientX <= r.right &&
+        touch.clientY >= r.top  && touch.clientY <= r.bottom
+      ) found = sec
+    })
+    if (found !== null) setDragOver(found)
+  }
+
+  const handleEnd = async () => {
+    const over = dragOverRef.current  
+    const id   = dragProductId.current
+    dragProductId.current = null
+    setDragOver(null)
+    dragOverRef.current = null
+    if (over && id) {
+      const product = products.find(p => p.id === id)
+      if (!product || product.seccion === over) return
+      const free = freeNivelesInSeccion(over, id)
+      if (free.length === 0) return
+      if (free.length === 1) {
+        await doMove(id, over, free[0], product)
+      } else {
+        setDragLevelPicker({ productId: id, targetSeccion: over, freeNiveles: free })
+      }
+    }
+  }
+
+  document.addEventListener('touchmove', handleMove, { passive: false })
+  document.addEventListener('touchend',  handleEnd)
+  return () => {
+    document.removeEventListener('touchmove', handleMove)
+    document.removeEventListener('touchend',  handleEnd)
+  }
+}, [dragEnabled, products])  // ← agregar products a las dependencias
 
   /* ── Cell map: seccion → productos[] ordenados por nivel ── */
   const cellMap = useMemo(() => {
@@ -289,22 +336,25 @@ export default function BodegaClient({
   }
 
   /* ── Touch drag ── */
+  
   function onTouchStart(e: React.TouchEvent, id: string) {
     if (!dragEnabled) return
     dragProductId.current = id
   }
 
-  function onTouchMove(e: React.TouchEvent) {
+  function onTouchMove(e: TouchEvent) {
     if (!dragProductId.current) return
     e.preventDefault()
     const touch = e.touches[0]
     let found: string | null = null
     cellRefs.current.forEach((el, sec) => {
       const r = el.getBoundingClientRect()
-      if (touch.clientX >= r.left && touch.clientX <= r.right &&
-          touch.clientY >= r.top  && touch.clientY <= r.bottom) found = sec
+      if (
+        touch.clientX >= r.left && touch.clientX <= r.right &&
+        touch.clientY >= r.top  && touch.clientY <= r.bottom
+      ) found = sec
     })
-    if (found) setDragOver(found)
+    if (found !== null) setDragOver(found)
   }
 
   async function onTouchEnd() {
@@ -312,6 +362,7 @@ export default function BodegaClient({
     dragProductId.current = null
     setDragOver(null)
   }
+
 
   /* ── Config ── */
   async function handleSaveConfig() {
@@ -549,9 +600,7 @@ export default function BodegaClient({
               <GridBorderMobile cols={cols} rows={rows} />
 
               {/* Grid interior */}
-              <div style={{ touchAction: dragEnabled ? 'none' : 'auto' }}
-                onTouchMove={dragEnabled ? onTouchMove : undefined}
-                onTouchEnd={dragEnabled ? onTouchEnd : undefined}>
+              <div style={{ touchAction: dragEnabled ? 'none' : 'auto' }}>
                 {Array.from({ length: rows }, (_, r) => (
                   <div key={r} className="flex items-stretch gap-0.5 mb-0.5">
                     <div className="w-4 flex-shrink-0 flex items-center justify-center text-[9px] font-bold text-gray-400">{r + 1}</div>
