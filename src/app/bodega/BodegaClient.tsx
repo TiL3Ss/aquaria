@@ -45,6 +45,13 @@ function getCalibreColor(c: string) {
   return CALIBRE_COLORS[c as Calibre] ?? { bg:'bg-gray-400', text:'text-white', dot:'#9ca3af', hex:'#9ca3af' }
 }
 
+function getCellFontSize(totalFranjas: number): string {
+  if (totalFranjas === 1) return '9px'
+  if (totalFranjas === 2) return '7px'
+  if (totalFranjas === 3) return '6px'
+  return '5px' // 4 o 5 franjas
+}
+
 const COL_LABELS = ['A','B','C','D','E','F','G','H','I','J']
 function getSectionLabel(col: number, row: number) { return `${COL_LABELS[col]}${row + 1}` }
 
@@ -660,14 +667,31 @@ export default function BodegaClient({
               style={{ minHeight: 0 }}
               title={`${prod.nombre} — ${sec}-${toRoman(prod.nivel)}`}
             >
-              <span className="text-[5px] font-black opacity-70 leading-none flex-shrink-0">
+              <span style={{ fontSize: getCellFontSize(MAX_NIVELES) }}
+                className="font-black opacity-70 leading-none flex-shrink-0">
                 {toRoman(prod.nivel)}
               </span>
-              <span className="text-[5px] font-bold leading-none truncate">
+              <span style={{ fontSize: getCellFontSize(MAX_NIVELES) }}
+                className="font-bold leading-none truncate">
                 {prod.calibre}
               </span>
               {prod.medicado && (
-                <span className="text-[5px] font-black leading-none opacity-80">✚</span>
+                <span style={{ fontSize: getCellFontSize(MAX_NIVELES) }}
+                  className="font-black leading-none opacity-80">✚</span>
+              )}
+
+              // DESPUÉS en el bloque sin huecos (totalFranjas = cell.length):
+              <span style={{ fontSize: getCellFontSize(cell.length) }}
+                className="font-black opacity-70 leading-none flex-shrink-0">
+                {toRoman(prod.nivel)}
+              </span>
+              <span style={{ fontSize: getCellFontSize(cell.length) }}
+                className="font-bold leading-none truncate">
+                {prod.calibre}
+              </span>
+              {prod.medicado && (
+                <span style={{ fontSize: getCellFontSize(cell.length) }}
+                  className="font-black leading-none opacity-80">✚</span>
               )}
             </div>
           )
