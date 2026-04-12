@@ -30,40 +30,54 @@ function computeReal(
   dietVariant: DietaVariant,
   cal1Pct:     number | null,
   cal2Pct:     number | null,
-): { real_tolva_kg: number | null; real_balde_cal1_kg: number | null; real_balde_cal2_kg: number | null; real_total_kg: number | null } {
+): {
+  real_tolva_kg:      number | null
+  real_tolva_cal2_kg: number | null   // ← nuevo
+  real_balde_cal1_kg: number | null
+  real_balde_cal2_kg: number | null
+  real_total_kg:      number | null
+} {
   const dTolva  = toN(row.dieta_tolva_kg)
+  const dTolva2 = dietVariant === '2_calibres_tolva' ? toN(row.dieta_tolva_cal2_kg) : null
   const dBal1   = toN(row.dieta_balde_cal1_kg)
   const dBal2   = toN(row.dieta_balde_cal2_kg)
   const sBalde  = toN(row.sobrante_balde_kg)
   const sTolva  = sobVariant === 'balde_tolva' ? toN(row.sobrante_tolva_kg) : 0
 
-  // Real Tolva = Dieta Tolva − Sobrante Tolva
-  const realTolva = dTolva !== null
-    ? round3((dTolva) - (sTolva ?? 0))
-    : null
+  // Tolva cal1 siempre descuenta sobrante tolva
+  const realTolva = dTolva !== null ? round3(dTolva - (sTolva ?? 0)) : null
+  // Tolva cal2 no descuenta sobrante (el sobrante va contra el mayor, que es tolva cal1)
+  const realTolva2 = dTolva2 !== null ? dTolva2 : null
 
   let realBal1: number | null = null
   let realBal2: number | null = null
 
-  if (dietVariant === '1_calibre') {
+  if (dietVariant === '1_calibre' || dietVariant === '2_calibres_tolva') {
+    // En ambos casos el balde es 1 solo calibre, sobrante balde descuenta de él
     realBal1 = dBal1 !== null ? round3(dBal1 - (sBalde ?? 0)) : null
     realBal2 = null
   } else {
-    // 2_calibres: el sobrante del balde descuenta del calibre mayor %
+    // 2_calibres: sobrante balde descuenta del calibre de mayor %
     const majorIdx = majorCalIdx(cal1Pct, cal2Pct)
     if (majorIdx === 1) {
       realBal1 = dBal1 !== null ? round3(dBal1 - (sBalde ?? 0)) : null
-      realBal2 = dBal2           // intacto
+      realBal2 = dBal2
     } else {
-      realBal1 = dBal1           // intacto
+      realBal1 = dBal1
       realBal2 = dBal2 !== null ? round3(dBal2 - (sBalde ?? 0)) : null
     }
   }
 
-  const parts = [realTolva, realBal1, realBal2].filter(v => v !== null) as number[]
+  const parts = [realTolva, realTolva2, realBal1, realBal2].filter(v => v !== null) as number[]
   const realTotal = parts.length > 0 ? round3(parts.reduce((a, b) => a + b, 0)) : null
 
-  return { real_tolva_kg: realTolva, real_balde_cal1_kg: realBal1, real_balde_cal2_kg: realBal2, real_total_kg: realTotal }
+  return {
+    real_tolva_kg:      realTolva,
+    real_tolva_cal2_kg: realTolva2,
+    real_balde_cal1_kg: realBal1,
+    real_balde_cal2_kg: realBal2,
+    real_total_kg:      realTotal,
+  }
 }
 
 function round3(n: number): number {
@@ -112,42 +126,48 @@ export async function upsertFeedingPlan(payload: {
 
   // Upsert cabecera
   const { data: plan, error: planErr } = await supabase
-    .from('ff_feeding_plan')
-    .upsert({
-      log_id:           logId,
-      sobrante_variant: sobranteVariant,
-      dieta_variant:    dietaVariant,
-      calibre_1:        calibre1 || null,
-      calibre_2:        dietaVariant === '2_calibres' ? (calibre2 || null) : null,
-      calibre_1_pct:    dietaVariant === '2_calibres' ? c1pct : null,
-      calibre_2_pct:    dietaVariant === '2_calibres' ? c2pct : null,
-    }, { onConflict: 'log_id' })
-    .select()
-    .single()
+  .from('ff_feeding_plan')
+  .upsert({
+    log_id:           logId,
+    sobrante_variant: sobranteVariant,
+    dieta_variant:    dietaVariant,
+    calibre_1:        calibre1 || null,
+    calibre_2:        (dietaVariant === '2_calibres' || dietaVariant === '2_calibres_tolva')
+                        ? (calibre2 || null) : null,
+    calibre_1_pct:    (dietaVariant === '2_calibres' || dietaVariant === '2_calibres_tolva')
+                        ? c1pct : null,
+    calibre_2_pct:    (dietaVariant === '2_calibres' || dietaVariant === '2_calibres_tolva')
+                        ? c2pct : null,
+  }, { onConflict: 'log_id' })
+  .select()
+  .single()
 
-  if (planErr) return { error: planErr.message }
+// En el map de rowsToUpsert, agrega los campos nuevos:
+const rowsToUpsert = FF_TK_IDS.map(tkId => {
+  const cell = rows[tkId] ?? {}
+  const real = computeReal(cell, sobranteVariant, dietaVariant, c1pct, c2pct)
+  const sTotal = sobranteVariant === 'balde_tolva'
+    ? (toN(cell.sobrante_balde_kg) !== null || toN(cell.sobrante_tolva_kg) !== null
+        ? round3((toN(cell.sobrante_balde_kg) ?? 0) + (toN(cell.sobrante_tolva_kg) ?? 0))
+        : null)
+    : toN(cell.sobrante_balde_kg)
 
-  // Upsert filas
-  const rowsToUpsert = FF_TK_IDS.map(tkId => {
-    const cell    = rows[tkId] ?? {}
-    const real    = computeReal(cell, sobranteVariant, dietaVariant, c1pct, c2pct)
-    const sTotal  = sobranteVariant === 'balde_tolva'
-      ? (toN(cell.sobrante_balde_kg) !== null || toN(cell.sobrante_tolva_kg) !== null
-          ? round3((toN(cell.sobrante_balde_kg) ?? 0) + (toN(cell.sobrante_tolva_kg) ?? 0))
-          : null)
-      : toN(cell.sobrante_balde_kg)
-
-    return {
-      plan_id:            plan.id,
-      tk_id:              tkId,
-      sobrante_balde_kg:  toN(cell.sobrante_balde_kg),
-      sobrante_tolva_kg:  sobranteVariant === 'balde_tolva' ? toN(cell.sobrante_tolva_kg) : null,
-      dieta_tolva_kg:     toN(cell.dieta_tolva_kg),
-      dieta_balde_cal1_kg: toN(cell.dieta_balde_cal1_kg),
-      dieta_balde_cal2_kg: dietaVariant === '2_calibres' ? toN(cell.dieta_balde_cal2_kg) : null,
-      ...real,
-    }
-  })
+  return {
+    plan_id:             plan.id,
+    tk_id:               tkId,
+    sobrante_balde_kg:   toN(cell.sobrante_balde_kg),
+    sobrante_tolva_kg:   sobranteVariant === 'balde_tolva' ? toN(cell.sobrante_tolva_kg) : null,
+    dieta_tolva_kg:      toN(cell.dieta_tolva_kg),
+    dieta_tolva_cal2_kg: dietaVariant === '2_calibres_tolva' ? toN(cell.dieta_tolva_cal2_kg) : null,
+    dieta_balde_cal1_kg: toN(cell.dieta_balde_cal1_kg),
+    dieta_balde_cal2_kg: dietaVariant === '2_calibres' ? toN(cell.dieta_balde_cal2_kg) : null,
+    real_tolva_kg:       real.real_tolva_kg,
+    real_tolva_cal2_kg:  real.real_tolva_cal2_kg,
+    real_balde_cal1_kg:  real.real_balde_cal1_kg,
+    real_balde_cal2_kg:  real.real_balde_cal2_kg,
+    real_total_kg:       real.real_total_kg,
+  }
+})
 
   const { error: rowsErr } = await supabase
     .from('ff_feeding_plan_rows')

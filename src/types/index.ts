@@ -109,7 +109,8 @@ export interface PozoReading {
 // Alimentación FF
 
 export type SobranteVariant = 'balde' | 'balde_tolva'
-export type DietaVariant    = '1_calibre' | '2_calibres'
+export type DietaVariant    = '1_calibre' | '2_calibres' | '2_calibres_tolva'
+
 
 export const FF_TK_IDS = ['TK1','TK2','TK3','TK4','TK5','TK6'] as const
 export type FfTkId = typeof FF_TK_IDS[number]
@@ -134,6 +135,7 @@ export interface FfFeedingPlanRow {
   sobrante_balde_kg:  number | null
   sobrante_tolva_kg:  number | null
   dieta_tolva_kg:     number | null
+  dieta_tolva_cal2_kg: number | null
   dieta_balde_cal1_kg: number | null
   dieta_balde_cal2_kg: number | null
   real_tolva_kg:       number | null
@@ -152,6 +154,7 @@ export interface PlanRowCell {
   sobrante_balde_kg?:   number
   sobrante_tolva_kg?:   number
   dieta_tolva_kg?:      number
+  dieta_tolva_cal2_kg?:  number
   dieta_balde_cal1_kg?: number
   dieta_balde_cal2_kg?: number
 }

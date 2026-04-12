@@ -45,18 +45,20 @@ function computeReal(
   cal1Pct: string,
   cal2Pct: string,
 ) {
-  const dTolva = toN(cell.dieta_tolva_kg)
-  const dBal1  = toN(cell.dieta_balde_cal1_kg)
-  const dBal2  = toN(cell.dieta_balde_cal2_kg)
-  const sBalde = toN(cell.sobrante_balde_kg) ?? 0
-  const sTolva = sobVar === 'balde_tolva' ? (toN(cell.sobrante_tolva_kg) ?? 0) : 0
+  const dTolva  = toN(cell.dieta_tolva_kg)
+  const dTolva2 = dietVar === '2_calibres_tolva' ? toN(cell.dieta_tolva_cal2_kg) : null
+  const dBal1   = toN(cell.dieta_balde_cal1_kg)
+  const dBal2   = toN(cell.dieta_balde_cal2_kg)
+  const sBalde  = toN(cell.sobrante_balde_kg) ?? 0
+  const sTolva  = sobVar === 'balde_tolva' ? (toN(cell.sobrante_tolva_kg) ?? 0) : 0
 
-  const realTolva = dTolva !== null ? r3(dTolva - sTolva) : null
+  const realTolva  = dTolva  !== null ? r3(dTolva  - sTolva) : null
+  const realTolva2 = dTolva2 !== null ? dTolva2 : null   
 
   let realBal1: number | null = null
   let realBal2: number | null = null
 
-  if (dietVar === '1_calibre') {
+  if (dietVar === '1_calibre' || dietVar === '2_calibres_tolva') {
     realBal1 = dBal1 !== null ? r3(dBal1 - sBalde) : null
   } else {
     const maj = majorCalIdx(cal1Pct, cal2Pct)
@@ -69,10 +71,10 @@ function computeReal(
     }
   }
 
-  const parts = [realTolva, realBal1, realBal2].filter(v => v !== null) as number[]
+  const parts = [realTolva, realTolva2, realBal1, realBal2].filter(v => v !== null) as number[]
   const realTotal = parts.length > 0 ? r3(parts.reduce((a, b) => a + b, 0)) : null
 
-  return { realTolva, realBal1, realBal2, realTotal }
+  return { realTolva, realTolva2, realBal1, realBal2, realTotal }  
 }
 
 function sobranteTotal(cell: PlanRowCell, sobVar: SobranteVariant): number | null {
@@ -167,6 +169,7 @@ export function generateAlimentacionPdf(payload: AlimentacionPdfPayload) {
   } = payload
 
   const is2Cal = dietVar === '2_calibres'
+  const is2CalTolva = dietVar === '2_calibres_tolva'
   const isBT   = sobVar === 'balde_tolva'
 
   // ── Totales ───────────────────────────────────────────
@@ -176,17 +179,25 @@ export function generateAlimentacionPdf(payload: AlimentacionPdfPayload) {
     : (totSobTolva !== null || totSobBalde !== null
         ? r3((totSobTolva ?? 0) + (totSobBalde ?? 0)) : null)
 
-  const totDietTolva = sumCol(rows, c => toN(c.dieta_tolva_kg))
-  const totDietBal1  = sumCol(rows, c => toN(c.dieta_balde_cal1_kg))
-  const totDietBal2  = is2Cal ? sumCol(rows, c => toN(c.dieta_balde_cal2_kg)) : null
-  const totDietMaj   = is2Cal ? sumCol(rows, c => dietaTotalMajor(c, majorIdx)) : null
-  const totDietTotal = [totDietTolva, totDietBal1, totDietBal2].filter(v => v !== null).length > 0
-    ? r3([totDietTolva ?? 0, totDietBal1 ?? 0, totDietBal2 ?? 0].reduce((a, b) => a + b, 0)) : null
+  const totRealTolva  = sumCol(rows, c => computeReal(c, sobVar, dietVar, cal1Pct, cal2Pct).realTolva)
+  const totRealTolva2 = is2CalTolva
+    ? sumCol(rows, c => computeReal(c, sobVar, dietVar, cal1Pct, cal2Pct).realTolva2) : null
+  const totRealBal1   = sumCol(rows, c => computeReal(c, sobVar, dietVar, cal1Pct, cal2Pct).realBal1)
+  const totRealBal2   = is2Cal
+    ? sumCol(rows, c => computeReal(c, sobVar, dietVar, cal1Pct, cal2Pct).realBal2) : null
+  const totRealTotal  = sumCol(rows, c => computeReal(c, sobVar, dietVar, cal1Pct, cal2Pct).realTotal)
 
-  const totRealTolva = sumCol(rows, c => computeReal(c, sobVar, dietVar, cal1Pct, cal2Pct).realTolva)
-  const totRealBal1  = sumCol(rows, c => computeReal(c, sobVar, dietVar, cal1Pct, cal2Pct).realBal1)
-  const totRealBal2  = is2Cal ? sumCol(rows, c => computeReal(c, sobVar, dietVar, cal1Pct, cal2Pct).realBal2) : null
-  const totRealTotal = sumCol(rows, c => computeReal(c, sobVar, dietVar, cal1Pct, cal2Pct).realTotal)
+  const totDietTolva  = sumCol(rows, c => toN(c.dieta_tolva_kg))
+  const totDietTolva2 = is2CalTolva ? sumCol(rows, c => toN(c.dieta_tolva_cal2_kg)) : null
+  const totDietBal1   = sumCol(rows, c => toN(c.dieta_balde_cal1_kg))
+  const totDietBal2   = is2Cal ? sumCol(rows, c => toN(c.dieta_balde_cal2_kg)) : null
+  const totDietMaj    = is2Cal ? sumCol(rows, c => dietaTotalMajor(c, majorIdx)) : null
+  const totDietTotal  = dietaTotal({ 
+    dieta_tolva_kg: totDietTolva ?? undefined,
+    dieta_tolva_cal2_kg: totDietTolva2 ?? undefined,
+    dieta_balde_cal1_kg: totDietBal1 ?? undefined,
+    dieta_balde_cal2_kg: totDietBal2 ?? undefined,
+  }, dietVar)
 
   // ── Encabezados de columna ────────────────────────────
   // Sobrante: Tolva / Balde / [Total]
@@ -196,17 +207,19 @@ export function generateAlimentacionPdf(payload: AlimentacionPdfPayload) {
 
   // Dieta: Tolva / Balde maj / [Balde min] / [Total maj] / Total
   const dietHeaders = is2Cal
-    ? `${th(`Tolva<br>${calMajorLabel}`)}${th(`Balde<br>${calMajorLabel}`)}${th(`Balde<br>${calMinorLabel}`)}${th(`Total<br>${calMajorLabel}`, 'class="col-major"')}${th('Total', 'class="col-total"')}`
-    : `${th(`Tolva<br>${calMajorLabel}`)}${th(`Balde<br>${calMajorLabel}`)}${th('Total', 'class="col-total"')}`
-
+  ? `${th(`Tolva<br>${calMajorLabel}`)}${th(`Balde<br>${calMajorLabel}`)}${th(`Balde<br>${calMinorLabel}`)}${th(`Total<br>${calMajorLabel}`, 'class="col-major"')}${th('Total', 'class="col-total"')}`
+  : is2CalTolva
+  ? `${th(`Tolva<br>${calMajorLabel}`)}${th(`Tolva<br>${calMinorLabel}`, 'class="col-major"')}${th(`Balde<br>${calMajorLabel}`)}${th('Total', 'class="col-total"')}`
+  : `${th(`Tolva<br>${calMajorLabel}`)}${th(`Balde<br>${calMajorLabel}`)}${th('Total', 'class="col-total"')}`
   // Real: Tolva / Balde maj / [Balde min] / Total
   const realHeaders = is2Cal
-    ? `${th(`Tolva<br>${calMajorLabel}`)}${th(`Balde<br>${calMajorLabel}`)}${th(`Balde<br>${calMinorLabel}`)}${th('Total', 'class="col-total"')}`
-    : `${th(`Tolva<br>${calMajorLabel}`)}${th(`Balde<br>${calMajorLabel}`)}${th('Total', 'class="col-total"')}`
-
+  ? `${th(`Tolva<br>${calMajorLabel}`)}${th(`Balde<br>${calMajorLabel}`)}${th(`Balde<br>${calMinorLabel}`)}${th('Total', 'class="col-total"')}`
+  : is2CalTolva
+  ? `${th(`Tolva<br>${calMajorLabel}`)}${th(`Tolva<br>${calMinorLabel}`)}${th(`Balde<br>${calMajorLabel}`)}${th('Total', 'class="col-total"')}`
+  : `${th(`Tolva<br>${calMajorLabel}`)}${th(`Balde<br>${calMajorLabel}`)}${th('Total', 'class="col-total"')}`
   const sobColSpan  = isBT ? 3 : 1
-  const dietColSpan = is2Cal ? 5 : 3
-  const realColSpan = is2Cal ? 4 : 3
+  const dietColSpan = is2Cal ? 5 : is2CalTolva ? 4 : 3
+  const realColSpan = (is2Cal || is2CalTolva) ? 4 : 3
 
   // ── Filas de datos ────────────────────────────────────
   const dataRows = FF_TK_IDS.map((tk, idx) => {
@@ -214,20 +227,52 @@ export function generateAlimentacionPdf(payload: AlimentacionPdfPayload) {
     const sobTot     = sobranteTotal(cell, sobVar)
     const dietTot    = dietaTotal(cell, dietVar)
     const dietMajTot = is2Cal ? dietaTotalMajor(cell, majorIdx) : null
-    const { realTolva, realBal1, realBal2, realTotal } = computeReal(cell, sobVar, dietVar, cal1Pct, cal2Pct)
+    const { realTolva, realTolva2, realBal1, realBal2, realTotal } = computeReal(cell, sobVar, dietVar, cal1Pct, cal2Pct)
+    
     const bg = idx % 2 === 1 ? 'background:#f9fafb' : ''
 
     const sobCells = isBT
       ? `${td(fmt(toN(cell.sobrante_tolva_kg)))}${td(fmt(toN(cell.sobrante_balde_kg)))}${td(fmt(sobTot), 'class="col-total"')}`
       : td(fmt(toN(cell.sobrante_balde_kg)))
 
+    const dietHeaders = is2Cal
+  ? `${th(`Tolva<br>${calMajorLabel}`)}${th(`Balde<br>${calMajorLabel}`)}${th(`Balde<br>${calMinorLabel}`)}${th(`Total<br>${calMajorLabel}`, 'class="col-major"')}${th('Total', 'class="col-total"')}`
+  : is2CalTolva
+  ? `${th(`Tolva<br>${calMajorLabel}`)}${th(`Tolva<br>${calMinorLabel}`, 'class="col-major"')}${th(`Balde<br>${calMajorLabel}`)}${th('Total', 'class="col-total"')}`
+  : `${th(`Tolva<br>${calMajorLabel}`)}${th(`Balde<br>${calMajorLabel}`)}${th('Total', 'class="col-total"')}`
+
+// Headers de real:
+const realHeaders = is2Cal
+  ? `${th(`Tolva<br>${calMajorLabel}`)}${th(`Balde<br>${calMajorLabel}`)}${th(`Balde<br>${calMinorLabel}`)}${th('Total', 'class="col-total"')}`
+  : is2CalTolva
+  ? `${th(`Tolva<br>${calMajorLabel}`)}${th(`Tolva<br>${calMinorLabel}`)}${th(`Balde<br>${calMajorLabel}`)}${th('Total', 'class="col-total"')}`
+  : `${th(`Tolva<br>${calMajorLabel}`)}${th(`Balde<br>${calMajorLabel}`)}${th('Total', 'class="col-total"')}`
+
+// Celdas por fila — reemplaza dietCells y realCells:
     const dietCells = is2Cal
       ? `${td(fmt(toN(cell.dieta_tolva_kg)))}${td(fmt(toN(cell.dieta_balde_cal1_kg)))}${td(fmt(toN(cell.dieta_balde_cal2_kg)))}${tdMajor(dietMajTot)}${tdCalc(dietTot)}`
+      : is2CalTolva
+      ? `${td(fmt(toN(cell.dieta_tolva_kg)))}${tdMajor(toN(cell.dieta_tolva_cal2_kg))}${td(fmt(toN(cell.dieta_balde_cal1_kg)))}${tdCalc(dietTot)}`
       : `${td(fmt(toN(cell.dieta_tolva_kg)))}${td(fmt(toN(cell.dieta_balde_cal1_kg)))}${tdCalc(dietTot)}`
 
     const realCells = is2Cal
       ? `${tdVal(realTolva, true)}${tdVal(realBal1, true)}${tdVal(realBal2, true)}${tdVal(realTotal, true)}`
+      : is2CalTolva
+      ? `${tdVal(realTolva, true)}${tdVal(realTolva2, true)}${tdVal(realBal1, true)}${tdVal(realTotal, true)}`
       : `${tdVal(realTolva, true)}${tdVal(realBal1, true)}${tdVal(realTotal, true)}`
+
+    // Totales de dieta y real en tfoot — reemplaza totDietCells y totRealCells:
+    const totDietCells = is2Cal
+      ? `${td(fmt(totDietTolva), 'class="tot-cell"')}${td(fmt(totDietBal1), 'class="tot-cell"')}${td(fmt(totDietBal2), 'class="tot-cell"')}${td(fmt(totDietMaj), 'class="tot-cell col-major"')}${td(fmt(totDietTotal), 'class="tot-cell col-total"')}`
+      : is2CalTolva
+      ? `${td(fmt(totDietTolva), 'class="tot-cell"')}${td(fmt(totDietTolva2), 'class="tot-cell col-major"')}${td(fmt(totDietBal1), 'class="tot-cell"')}${td(fmt(totDietTotal), 'class="tot-cell col-total"')}`
+      : `${td(fmt(totDietTolva), 'class="tot-cell"')}${td(fmt(totDietBal1), 'class="tot-cell"')}${td(fmt(totDietTotal), 'class="tot-cell col-total"')}`
+
+    const totRealCells = is2Cal
+      ? `${tdRealTot(totRealTolva)}${tdRealTot(totRealBal1)}${tdRealTot(totRealBal2)}${tdRealTot(totRealTotal)}`
+      : is2CalTolva
+      ? `${tdRealTot(totRealTolva)}${tdRealTot(totRealTolva2)}${tdRealTot(totRealBal1)}${tdRealTot(totRealTotal)}`
+      : `${tdRealTot(totRealTolva)}${tdRealTot(totRealBal1)}${tdRealTot(totRealTotal)}`
 
     return `<tr style="${bg}">
       <td class="tk-id">${tk}</td>
@@ -394,6 +439,11 @@ export function generateAlimentacionPdf(payload: AlimentacionPdfPayload) {
       <div class="info-label">Calibre(s)</div>
       <div class="info-value">${calibreInfo}</div>
     </div>
+    <div class="info-value">${
+      dietVar === '1_calibre' ? '1 Calibre' :
+      dietVar === '2_calibres_tolva' ? '2 Cal. Mezcla Tolva' :
+      '2 Calibres / Mezcla Balde'
+    }</div>
   </div>
 
   <!-- Tabla principal -->
@@ -443,6 +493,10 @@ export function generateAlimentacionPdf(payload: AlimentacionPdfPayload) {
     ${is2Cal ? `<div class="legend-item">
       <span class="legend-dot" style="background:#6366f1"></span>
       <span class="legend-text">Total ${calMajorLabel} — tolva + balde del calibre de mayor %</span>
+    </div>` : ''}
+    ${is2CalTolva ? `<div class="legend-item">
+      <span class="legend-dot" style="background:#6366f1"></span>
+      <span class="legend-text">Tolva 2 — segundo calibre mezclado en tolva (${calMinorLabel})</span>
     </div>` : ''}
     <div class="legend-item">
       <span class="legend-dot" style="background:#059669"></span>

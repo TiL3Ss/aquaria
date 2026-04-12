@@ -1,3 +1,4 @@
+// src/components/AlimentacionFF.tsx
 'use client'
 
 import { useState, useCallback } from 'react'
@@ -29,6 +30,7 @@ function majorCalIdx(c1: string | null, c2: string | null): 1 | 2 {
   return p1 >= p2 ? 1 : 2
 }
 
+// computeReal — mismo ajuste que en actions:
 function computeReal(
   cell: PlanRowCell,
   sobVar: SobranteVariant,
@@ -36,18 +38,20 @@ function computeReal(
   cal1Pct: string,
   cal2Pct: string,
 ) {
-  const dTolva = toN(cell.dieta_tolva_kg)
-  const dBal1  = toN(cell.dieta_balde_cal1_kg)
-  const dBal2  = toN(cell.dieta_balde_cal2_kg)
-  const sBalde = toN(cell.sobrante_balde_kg) ?? 0
-  const sTolva = sobVar === 'balde_tolva' ? (toN(cell.sobrante_tolva_kg) ?? 0) : 0
+  const dTolva  = toN(cell.dieta_tolva_kg)
+  const dTolva2 = dietVar === '2_calibres_tolva' ? toN(cell.dieta_tolva_cal2_kg) : null
+  const dBal1   = toN(cell.dieta_balde_cal1_kg)
+  const dBal2   = toN(cell.dieta_balde_cal2_kg)
+  const sBalde  = toN(cell.sobrante_balde_kg) ?? 0
+  const sTolva  = sobVar === 'balde_tolva' ? (toN(cell.sobrante_tolva_kg) ?? 0) : 0
 
-  const realTolva = dTolva !== null ? r3(dTolva - sTolva) : null
+  const realTolva  = dTolva  !== null ? r3(dTolva  - sTolva) : null
+  const realTolva2 = dTolva2 !== null ? dTolva2 : null
 
   let realBal1: number | null = null
   let realBal2: number | null = null
 
-  if (dietVar === '1_calibre') {
+  if (dietVar === '1_calibre' || dietVar === '2_calibres_tolva') {
     realBal1 = dBal1 !== null ? r3(dBal1 - sBalde) : null
   } else {
     const maj = majorCalIdx(cal1Pct, cal2Pct)
@@ -60,10 +64,20 @@ function computeReal(
     }
   }
 
-  const parts = [realTolva, realBal1, realBal2].filter(v => v !== null) as number[]
+  const parts = [realTolva, realTolva2, realBal1, realBal2].filter(v => v !== null) as number[]
   const realTotal = parts.length > 0 ? r3(parts.reduce((a, b) => a + b, 0)) : null
 
-  return { realTolva, realBal1, realBal2, realTotal }
+  return { realTolva, realTolva2, realBal1, realBal2, realTotal }
+}
+
+// dietaTotal — suma tolva2 si aplica:
+function dietaTotal(cell: PlanRowCell, dietVar: DietaVariant): number | null {
+  const tolva  = toN(cell.dieta_tolva_kg)
+  const tolva2 = dietVar === '2_calibres_tolva' ? toN(cell.dieta_tolva_cal2_kg) : null
+  const bal1   = toN(cell.dieta_balde_cal1_kg)
+  const bal2   = dietVar === '2_calibres' ? toN(cell.dieta_balde_cal2_kg) : null
+  const parts  = [tolva, tolva2, bal1, bal2].filter(v => v !== null) as number[]
+  return parts.length > 0 ? r3(parts.reduce((a, b) => a + b, 0)) : null
 }
 
 // Sobrante total — orden: Tolva + Balde
@@ -75,13 +89,6 @@ function sobranteTotal(cell: PlanRowCell, sobVar: SobranteVariant): number | nul
   return r3((t ?? 0) + (b ?? 0))
 }
 
-function dietaTotal(cell: PlanRowCell, dietVar: DietaVariant): number | null {
-  const tolva = toN(cell.dieta_tolva_kg)
-  const bal1  = toN(cell.dieta_balde_cal1_kg)
-  const bal2  = dietVar === '2_calibres' ? toN(cell.dieta_balde_cal2_kg) : null
-  const parts = [tolva, bal1, bal2].filter(v => v !== null) as number[]
-  return parts.length > 0 ? r3(parts.reduce((a, b) => a + b, 0)) : null
-}
 
 // Total Tolva + Balde del calibre de mayor % (solo en 2_calibres)
 function dietaTotalMajor(cell: PlanRowCell, majorIdx: 1 | 2): number | null {
@@ -211,6 +218,7 @@ export default function AlimentacionFF({ logId, date, initialData, onClose }: Pr
       map[tk] = r ? {
         sobrante_balde_kg:   toN(r.sobrante_balde_kg)   ?? undefined,
         sobrante_tolva_kg:   toN(r.sobrante_tolva_kg)   ?? undefined,
+        dieta_tolva_cal2_kg: toN(r.dieta_tolva_cal2_kg)  ?? undefined,
         dieta_tolva_kg:      toN(r.dieta_tolva_kg)      ?? undefined,
         dieta_balde_cal1_kg: toN(r.dieta_balde_cal1_kg) ?? undefined,
         dieta_balde_cal2_kg: toN(r.dieta_balde_cal2_kg) ?? undefined,
@@ -237,8 +245,11 @@ export default function AlimentacionFF({ logId, date, initialData, onClose }: Pr
 
   // colSpans dinámicos
   const sobCols  = sobVar === 'balde' ? 1 : 3
-  const dietCols = dietVar === '1_calibre' ? 3 : 5   // +1 por columna totalMaj
-  const realCols = dietVar === '1_calibre' ? 3 : 4
+  const dietCols = dietVar === '1_calibre' ? 3
+               : dietVar === '2_calibres_tolva' ? 4   
+               : 5  
+  const realCols = dietVar === '1_calibre' ? 3
+               : 4 
 
   // ── Helpers ───────────────────────────────────────────
   const setCell = useCallback((tk: FfTkId, field: keyof PlanRowCell, raw: string) => {
