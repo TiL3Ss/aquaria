@@ -109,7 +109,7 @@ export interface PozoReading {
 // Alimentación FF
 
 export type SobranteVariant = 'balde' | 'balde_tolva'
-export type DietaVariant    = '1_calibre' | '2_calibres' | '2_calibres_tolva'
+export type DietaVariant = '1_calibre' | '2_calibres' | '2_calibres_tolva' | '2_calibres_ambos'
 
 
 export const FF_TK_IDS = ['TK1','TK2','TK3','TK4','TK5','TK6'] as const

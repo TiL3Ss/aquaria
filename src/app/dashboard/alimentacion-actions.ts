@@ -38,7 +38,8 @@ function computeReal(
   real_total_kg:      number | null
 } {
   const dTolva  = toN(row.dieta_tolva_kg)
-  const dTolva2 = dietVariant === '2_calibres_tolva' ? toN(row.dieta_tolva_cal2_kg) : null
+  const dTolva2 = (dietVariant === '2_calibres_tolva' || dietVariant === '2_calibres_ambos')
+    ? toN(row.dieta_tolva_cal2_kg) : null
   const dBal1   = toN(row.dieta_balde_cal1_kg)
   const dBal2   = toN(row.dieta_balde_cal2_kg)
   const sBalde  = toN(row.sobrante_balde_kg)
@@ -53,11 +54,10 @@ function computeReal(
   let realBal2: number | null = null
 
   if (dietVariant === '1_calibre' || dietVariant === '2_calibres_tolva') {
-    // En ambos casos el balde es 1 solo calibre, sobrante balde descuenta de él
     realBal1 = dBal1 !== null ? round3(dBal1 - (sBalde ?? 0)) : null
     realBal2 = null
   } else {
-    // 2_calibres: sobrante balde descuenta del calibre de mayor %
+    // 2_calibres y 2_calibres_ambos: sobrante balde descuenta del calibre de mayor %
     const majorIdx = majorCalIdx(cal1Pct, cal2Pct)
     if (majorIdx === 1) {
       realBal1 = dBal1 !== null ? round3(dBal1 - (sBalde ?? 0)) : null
@@ -132,11 +132,11 @@ export async function upsertFeedingPlan(payload: {
     sobrante_variant: sobranteVariant,
     dieta_variant:    dietaVariant,
     calibre_1:        calibre1 || null,
-    calibre_2:        (dietaVariant === '2_calibres' || dietaVariant === '2_calibres_tolva')
+    calibre_2:        (dietaVariant === '2_calibres' || dietaVariant === '2_calibres_tolva' || dietaVariant === '2_calibres_ambos')
                         ? (calibre2 || null) : null,
-    calibre_1_pct:    (dietaVariant === '2_calibres' || dietaVariant === '2_calibres_tolva')
+    calibre_1_pct:    (dietaVariant === '2_calibres' || dietaVariant === '2_calibres_tolva' || dietaVariant === '2_calibres_ambos')
                         ? c1pct : null,
-    calibre_2_pct:    (dietaVariant === '2_calibres' || dietaVariant === '2_calibres_tolva')
+    calibre_2_pct:    (dietaVariant === '2_calibres' || dietaVariant === '2_calibres_tolva' || dietaVariant === '2_calibres_ambos')
                         ? c2pct : null,
   }, { onConflict: 'log_id' })
   .select()
@@ -158,9 +158,11 @@ const rowsToUpsert = FF_TK_IDS.map(tkId => {
     sobrante_balde_kg:   toN(cell.sobrante_balde_kg),
     sobrante_tolva_kg:   sobranteVariant === 'balde_tolva' ? toN(cell.sobrante_tolva_kg) : null,
     dieta_tolva_kg:      toN(cell.dieta_tolva_kg),
-    dieta_tolva_cal2_kg: dietaVariant === '2_calibres_tolva' ? toN(cell.dieta_tolva_cal2_kg) : null,
+    dieta_tolva_cal2_kg: (dietaVariant === '2_calibres_tolva' || dietaVariant === '2_calibres_ambos')
+      ? toN(cell.dieta_tolva_cal2_kg) : null,
+    dieta_balde_cal2_kg: (dietaVariant === '2_calibres' || dietaVariant === '2_calibres_ambos')
+      ? toN(cell.dieta_balde_cal2_kg) : null,
     dieta_balde_cal1_kg: toN(cell.dieta_balde_cal1_kg),
-    dieta_balde_cal2_kg: dietaVariant === '2_calibres' ? toN(cell.dieta_balde_cal2_kg) : null,
     real_tolva_kg:       real.real_tolva_kg,
     real_tolva_cal2_kg:  real.real_tolva_cal2_kg,
     real_balde_cal1_kg:  real.real_balde_cal1_kg,
