@@ -138,9 +138,11 @@ export async function upsertFeedingPlan(payload: {
                         ? c1pct : null,
     calibre_2_pct:    (dietaVariant === '2_calibres' || dietaVariant === '2_calibres_tolva' || dietaVariant === '2_calibres_ambos')
                         ? c2pct : null,
+    updated_at:       new Date().toISOString(),
   }, { onConflict: 'log_id' })
   .select()
   .single()
+  if (planErr || !plan) return { error: planErr?.message ?? 'Error al guardar el plan' }
 
 // En el map de rowsToUpsert, agrega los campos nuevos:
 const rowsToUpsert = FF_TK_IDS.map(tkId => {
