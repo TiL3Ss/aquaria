@@ -1,6 +1,6 @@
 // src/app/dashboard/DashboardClient.tsx
 
-'use client'
+'use client' 
 
 import { useState, useEffect, useCallback } from 'react'
 import type { ReactNode } from 'react'
