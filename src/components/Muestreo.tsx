@@ -1,4 +1,4 @@
-// src/components/Muestreo.tsx
+// src/components/Muestreo.tsx 
 'use client'
 
 import { useState, useCallback, useMemo } from 'react'
