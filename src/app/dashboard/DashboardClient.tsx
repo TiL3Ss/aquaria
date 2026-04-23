@@ -1,6 +1,6 @@
-// src/app/dashboard/DashboardClient.tsx
+// src/app/dashboard/DashboardClient.tsx 
 
-'use client' 
+'use client'
 
 import { useState, useEffect, useCallback } from 'react'
 import type { ReactNode } from 'react'
@@ -12,6 +12,7 @@ import { getLogsForMonth } from './actions'
 import Image from "next/image"
 import libro from "@/IMG/librob.png"
 import { LogOut as Salir} from 'lucide-react';
+import Muestreo from '@/components/Muestreo'
 
 const MONTHS = [
   'Enero','Febrero','Marzo','Abril','Mayo','Junio',
@@ -72,6 +73,8 @@ export default function DashboardClient({ profile, dbModules }: Props) {
   const [loadingLogs,    setLoadingLogs]    = useState(false)
   const [clock,          setClock]          = useState('')
   const [drawerOpen,     setDrawerOpen]     = useState(false)
+
+  const [showMuestreo, setShowMuestreo] = useState(false)
 
   /* ── Pick module from selection screen ── */
   function pickModule(mod: DbModule) {
@@ -139,6 +142,11 @@ export default function DashboardClient({ profile, dbModules }: Props) {
   }
 
   const initials = profile.full_name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase()
+
+  const formattedDate = selectedDay !== null
+    ? `${String(selectedDay).padStart(2,'0')}/${String(month+1).padStart(2,'0')}/${year}`
+    : ''
+
 
   /* ══════════════════════════════════════════════════════════
      MODULE PICKER SCREEN
@@ -230,6 +238,20 @@ export default function DashboardClient({ profile, dbModules }: Props) {
             </button>
           </form>
         </div>
+      </div>
+    )
+  }
+
+  if (showMuestreo && selectedDay !== null) {
+    return (
+      <div className="fixed inset-0 z-50 bg-[#F2F2F7] flex flex-col">
+        <Muestreo
+          moduleName={selectedModule.name}
+          date={dateStr(selectedDay)}
+          logId=""  // TODO: pass actual logId if available for the selected day/shift
+          userName={profile.full_name}
+          onClose={() => setShowMuestreo(false)}
+        />
       </div>
     )
   }
@@ -520,6 +542,36 @@ export default function DashboardClient({ profile, dbModules }: Props) {
                 </div>
               )
             })}
+            <button
+              onClick={() => setShowMuestreo(true)}
+              className="w-full flex items-center justify-center gap-2.5 py-4 rounded-2xl
+                bg-gradient-to-r from-emerald-500 to-teal-500
+                text-white text-[14px] font-bold
+                shadow-md shadow-emerald-200
+                active:scale-[0.97] active:shadow-sm
+                transition-all duration-150">
+              <svg 
+                width="18" 
+                height="18" 
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke="white" 
+                strokeWidth="2.2" 
+                strokeLinecap="round" 
+                strokeLinejoin="round"
+              >
+                <path d="M12 3v18" />
+                <path d="M5 21h14" />
+                <path d="M5 7h14" />
+                <path d="M7 7l-3 6" />
+                <path d="M7 7l3 6" />
+                <path d="M17 7l-3 6" />
+                <path d="M17 7l3 6" />
+                <path d="M4 13a3 3 0 006 0z" />
+                <path d="M14 13a3 3 0 006 0z" />
+              </svg>
+              Muestreo de {selectedModule.name} — {formattedDate}
+            </button>
           </div>
         )}
       </main>
