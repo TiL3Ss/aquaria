@@ -1,6 +1,6 @@
-// src/app/dashboard/DashboardClient.tsx
+// src/app/dashboard/DashboardClient.tsx 
 
-'use client' 
+'use client'
 
 import { useState, useEffect, useCallback } from 'react'
 import type { ReactNode } from 'react'
@@ -12,6 +12,8 @@ import { getLogsForMonth } from './actions'
 import Image from "next/image"
 import libro from "@/IMG/librob.png"
 import { LogOut as Salir} from 'lucide-react';
+import Muestreo from '@/components/Muestreo'
+
 
 const MONTHS = [
   'Enero','Febrero','Marzo','Abril','Mayo','Junio',
@@ -28,6 +30,7 @@ const SHIFT_STYLE: Record<Shift, ShiftStyle> = {
   dia:   { headerBg:'bg-amber-50',  dotBg:'bg-amber-400',  labelColor:'text-amber-700',  emptyDot:'bg-amber-200'  },
   tarde: { headerBg:'bg-orange-50', dotBg:'bg-orange-400', labelColor:'text-orange-700', emptyDot:'bg-orange-200' },
 }
+ const NOCHE_DIETA_STYLE: ShiftStyle = { headerBg: 'bg-blue-950/10', dotBg: 'bg-blue-900', labelColor: 'text-blue-900', emptyDot: 'bg-blue-800',}
 
 // Icon map per slug — fallback to initials
 const MODULE_ICONS: Record<string, ReactNode> = {
@@ -68,10 +71,14 @@ export default function DashboardClient({ profile, dbModules }: Props) {
   const [year,           setYear]           = useState(initialYear)
   const [month,          setMonth]          = useState(initialMonth)
   const [selectedDay,    setSelectedDay]    = useState<number | null>(initialDay)
-  const [logsMap,        setLogsMap]        = useState<Record<string, Record<Shift, boolean>>>({})
+  const [logsMap,     setLogsMap]     = useState<Record<string, Record<Shift, boolean>>>({})
+  const [muestreosMap, setMuestreosMap] = useState<Record<string, boolean>>({})
+  const [nocheDietaMap, setNocheDietaMap] = useState<Record<string, boolean>>({})
   const [loadingLogs,    setLoadingLogs]    = useState(false)
   const [clock,          setClock]          = useState('')
   const [drawerOpen,     setDrawerOpen]     = useState(false)
+
+  const [showMuestreo, setShowMuestreo] = useState(false)
 
   /* ── Pick module from selection screen ── */
   function pickModule(mod: DbModule) {
@@ -93,12 +100,16 @@ export default function DashboardClient({ profile, dbModules }: Props) {
 
   /* ── Load logs map ─── */
   const loadLogs = useCallback(() => {
-    if (showPicker) return
-    setLoadingLogs(true)
-    getLogsForMonth(selectedModule.slug, year, month + 1)
-      .then(setLogsMap)
-      .finally(() => setLoadingLogs(false))
-  }, [selectedModule, year, month, showPicker])
+  if (showPicker) return
+  setLoadingLogs(true)
+  getLogsForMonth(selectedModule.slug, year, month + 1)
+    .then(({ logs, muestreos, nocheDieta }) => {   
+      setLogsMap(logs)
+      setMuestreosMap(muestreos)
+      setNocheDietaMap(nocheDieta)
+    })
+    .finally(() => setLoadingLogs(false))
+}, [selectedModule, year, month, showPicker])
 
   useEffect(() => { loadLogs() }, [loadLogs])
 
@@ -139,6 +150,11 @@ export default function DashboardClient({ profile, dbModules }: Props) {
   }
 
   const initials = profile.full_name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase()
+
+  const formattedDate = selectedDay !== null
+    ? `${String(selectedDay).padStart(2,'0')}/${String(month+1).padStart(2,'0')}/${year}`
+    : ''
+
 
   /* ══════════════════════════════════════════════════════════
      MODULE PICKER SCREEN
@@ -230,6 +246,20 @@ export default function DashboardClient({ profile, dbModules }: Props) {
             </button>
           </form>
         </div>
+      </div>
+    )
+  }
+
+  if (showMuestreo && selectedDay !== null) {
+    return (
+      <div className="fixed inset-0 z-50 bg-[#F2F2F7] flex flex-col">
+        <Muestreo
+          moduleName={selectedModule.name}
+          moduleSlug={selectedModule.slug}
+          date={dateStr(selectedDay)}
+          userName={profile.full_name}
+          onClose={() => setShowMuestreo(false)}
+        />
       </div>
     )
   }
@@ -389,18 +419,28 @@ export default function DashboardClient({ profile, dbModules }: Props) {
 
                   return (
                     <button key={day} onClick={() => setSelectedDay(day)}
-                      className={`relative flex flex-col items-center justify-center rounded-2xl py-1 transition-all active:scale-90
-                        ${isToday ? 'bg-blue-500' : 'active:bg-gray-100'}`}>
-                      <span className={`text-[15px] font-semibold tabular-nums leading-tight
-                        ${isToday ? 'text-white' : 'text-gray-800'}`}>{day}</span>
-                      <div className="flex gap-0.5 h-2 items-center mt-0.5">
-                        {logCount > 0
-                          ? shifts.map(s => (
-                              <span key={s} className={`w-1.5 h-1.5 rounded-full ${isToday ? 'bg-white/80' : SHIFT_STYLE[s].dotBg}`} />
-                            ))
-                          : <span className="w-1.5 h-1.5 rounded-full opacity-0" />
-                        }
-                      </div>
+                        className={`relative flex flex-col items-center justify-center rounded-2xl py-1 transition-all active:scale-90
+                          ${isToday ? 'bg-blue-500' : 'active:bg-gray-100'}`}>
+                        <span className={`text-[15px] font-semibold tabular-nums leading-tight
+                          ${isToday ? 'text-white' : 'text-gray-800'}`}>{day}</span>
+                        <div className="flex gap-0.5 h-2 items-center mt-0.5">
+                          {logCount > 0
+                            ? shifts.map(s => {
+                                // Noche con dieta en FF → azul oscuro
+                                const isNocheDieta = s === 'noche' && nocheDietaMap[ds]
+                                const dotColor = isToday
+                                  ? 'bg-white/80'
+                                  : isNocheDieta
+                                    ? 'bg-blue-900'
+                                    : SHIFT_STYLE[s].dotBg
+                                return <span key={s} className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />
+                              })
+                            : <span className="w-1.5 h-1.5 rounded-full opacity-0" />
+                          }
+                          {muestreosMap[ds] && (
+                            <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isToday ? 'bg-white/80' : 'bg-emerald-500'}`} />
+                          )}
+                        </div>
                     </button>
                   )
                 })}
@@ -422,13 +462,25 @@ export default function DashboardClient({ profile, dbModules }: Props) {
               </div>
             </div>
 
-            <div className="flex items-center justify-center gap-4 py-1">
-              {(['noche','dia','tarde'] as Shift[]).map(s => (
+            <div className="flex items-center justify-center gap-4 py-1 flex-wrap">
+              {(['noche', 'dia', 'tarde'] as Shift[]).map(s => (
                 <div key={s} className="flex items-center gap-1.5">
                   <span className={`w-2 h-2 rounded-full ${SHIFT_STYLE[s].dotBg}`} />
                   <span className="text-[11px] text-gray-400 font-medium">{SHIFT_LABELS[s]}</span>
                 </div>
               ))}
+              {/* Noche con dieta — solo visible en FF */}
+              {selectedModule.slug === 'ff' && (
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-blue-900" />
+                  <span className="text-[11px] text-gray-400 font-medium">Noche c/ dieta</span>
+                </div>
+              )}
+              {/* Muestreo */}
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                <span className="text-[11px] text-gray-400 font-medium">Muestreo</span>
+              </div>
             </div>
           </div>
 
@@ -520,6 +572,36 @@ export default function DashboardClient({ profile, dbModules }: Props) {
                 </div>
               )
             })}
+            <button
+              onClick={() => setShowMuestreo(true)}
+              className="w-full flex items-center justify-center gap-2.5 py-4 rounded-2xl
+                bg-gradient-to-r from-emerald-500 to-teal-500
+                text-white text-[14px] font-bold
+                shadow-md shadow-emerald-200
+                active:scale-[0.97] active:shadow-sm
+                transition-all duration-150">
+              <svg 
+                width="18" 
+                height="18" 
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke="white" 
+                strokeWidth="2.2" 
+                strokeLinecap="round" 
+                strokeLinejoin="round"
+              >
+                <path d="M12 3v18" />
+                <path d="M5 21h14" />
+                <path d="M5 7h14" />
+                <path d="M7 7l-3 6" />
+                <path d="M7 7l3 6" />
+                <path d="M17 7l-3 6" />
+                <path d="M17 7l3 6" />
+                <path d="M4 13a3 3 0 006 0z" />
+                <path d="M14 13a3 3 0 006 0z" />
+              </svg>
+              Muestreo de {selectedModule.name} — {formattedDate}
+            </button>
           </div>
         )}
       </main>

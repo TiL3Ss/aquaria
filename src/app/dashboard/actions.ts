@@ -14,7 +14,11 @@ export async function getLogsForMonth(
   moduleSlug: string,
   year: number,
   month: number
-): Promise<Record<string, Record<Shift, boolean>>> {
+): Promise<{
+  logs: Record<string, Record<Shift, boolean>>
+  muestreos: Record<string, boolean>
+  nocheDieta: Record<string, boolean>
+}> {
   const supabase = await createClient()
   const startDate = `${year}-${String(month).padStart(2, '0')}-01`
   const lastDay = new Date(year, month, 0).getDate()
@@ -22,18 +26,57 @@ export async function getLogsForMonth(
 
   const { data: module } = await supabase
     .from('modules').select('id').eq('slug', moduleSlug.toLowerCase()).single()
-  if (!module) return {}
+  if (!module) return { logs: {}, muestreos: {}, nocheDieta: {} }
 
+  // ── 1. Logs de bitácora ───────────────────────────────────
   const { data: logs } = await supabase
-    .from('logs').select('log_date, shift')
+    .from('logs').select('id, log_date, shift')
     .eq('module_id', module.id).gte('log_date', startDate).lte('log_date', endDate)
 
-  const result: Record<string, Record<Shift, boolean>> = {}
+  const logsResult: Record<string, Record<Shift, boolean>> = {}
+  const nocheLogIds: Record<string, string> = {} // date → log_id
+
   logs?.forEach((log) => {
-    if (!result[log.log_date]) result[log.log_date] = { noche: false, dia: false, tarde: false }
-    result[log.log_date][log.shift as Shift] = true
+    if (!logsResult[log.log_date]) {
+      logsResult[log.log_date] = { noche: false, dia: false, tarde: false }
+    }
+    logsResult[log.log_date][log.shift as Shift] = true
+    if (log.shift === 'noche') nocheLogIds[log.log_date] = log.id
   })
-  return result
+
+  // ── 2. Muestreos del módulo en el mes ────────────────────
+  const { data: muestreoData } = await supabase
+    .from('muestreo_sessions')
+    .select('session_date')
+    .eq('module_slug', moduleSlug)
+    .gte('session_date', startDate)
+    .lte('session_date', endDate)
+
+  const muestreosResult: Record<string, boolean> = {}
+  muestreoData?.forEach((m) => {
+    if (m.session_date) muestreosResult[m.session_date] = true
+  })
+
+  // ── 3. Turno noche con dieta (solo FF) ───────────────────
+  const nocheDietaResult: Record<string, boolean> = {}
+  const isFF = moduleSlug.toLowerCase() === 'ff'
+
+  if (isFF && Object.keys(nocheLogIds).length > 0) {
+    const logIds = Object.values(nocheLogIds)
+
+    const { data: feedingPlans } = await supabase
+      .from('ff_feeding_plan')
+      .select('log_id')
+      .in('log_id', logIds)
+
+    const planLogIds = new Set(feedingPlans?.map(p => p.log_id) ?? [])
+
+    Object.entries(nocheLogIds).forEach(([date, logId]) => {
+      if (planLogIds.has(logId)) nocheDietaResult[date] = true
+    })
+  }
+
+  return { logs: logsResult, muestreos: muestreosResult, nocheDieta: nocheDietaResult }
 }
 
 export async function getLog(moduleSlug: string, date: string, shift: Shift): Promise<LogFull | null> {
