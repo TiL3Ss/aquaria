@@ -1,7 +1,5 @@
 // src/app/dashboard/DashboardClient.tsx 
-// src/app/dashboard/DashboardClient.tsx 
 
-'use client'
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
@@ -82,7 +80,6 @@ export default function DashboardClient({ profile, dbModules }: Props) {
 
   const [showMuestreo, setShowMuestreo] = useState(false)
 
-  const [showMuestreo, setShowMuestreo] = useState(false)
 
   /* ── Pick module from selection screen ── */
   function pickModule(mod: DbModule) {
@@ -158,12 +155,6 @@ export default function DashboardClient({ profile, dbModules }: Props) {
   const formattedDate = selectedDay !== null
     ? `${String(selectedDay).padStart(2,'0')}/${String(month+1).padStart(2,'0')}/${year}`
     : ''
-
-
-  const formattedDate = selectedDay !== null
-    ? `${String(selectedDay).padStart(2,'0')}/${String(month+1).padStart(2,'0')}/${year}`
-    : ''
-
 
   /* ══════════════════════════════════════════════════════════
      MODULE PICKER SCREEN
