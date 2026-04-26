@@ -148,7 +148,7 @@ export async function upsertMuestreo(payload: {
   }
 
   revalidatePath('/dashboard')
-  return { sessionId: resolvedSessionId }
+  return { sessionId: resolvedSessionId  ?? undefined }
 }
 
 // ── GET — cargar sesión existente ─────────────────────────────
