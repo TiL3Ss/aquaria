@@ -1,5 +1,7 @@
 // src/app/dashboard/DashboardClient.tsx 
+// src/app/dashboard/DashboardClient.tsx 
 
+'use client'
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
@@ -80,6 +82,8 @@ export default function DashboardClient({ profile, dbModules }: Props) {
 
   const [showMuestreo, setShowMuestreo] = useState(false)
 
+  const [showMuestreo, setShowMuestreo] = useState(false)
+
   /* ── Pick module from selection screen ── */
   function pickModule(mod: DbModule) {
     if (mod.slug === 'bodega') {
@@ -150,6 +154,11 @@ export default function DashboardClient({ profile, dbModules }: Props) {
   }
 
   const initials = profile.full_name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase()
+
+  const formattedDate = selectedDay !== null
+    ? `${String(selectedDay).padStart(2,'0')}/${String(month+1).padStart(2,'0')}/${year}`
+    : ''
+
 
   const formattedDate = selectedDay !== null
     ? `${String(selectedDay).padStart(2,'0')}/${String(month+1).padStart(2,'0')}/${year}`
@@ -572,6 +581,36 @@ export default function DashboardClient({ profile, dbModules }: Props) {
                 </div>
               )
             })}
+            <button
+              onClick={() => setShowMuestreo(true)}
+              className="w-full flex items-center justify-center gap-2.5 py-4 rounded-2xl
+                bg-gradient-to-r from-emerald-500 to-teal-500
+                text-white text-[14px] font-bold
+                shadow-md shadow-emerald-200
+                active:scale-[0.97] active:shadow-sm
+                transition-all duration-150">
+              <svg 
+                width="18" 
+                height="18" 
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke="white" 
+                strokeWidth="2.2" 
+                strokeLinecap="round" 
+                strokeLinejoin="round"
+              >
+                <path d="M12 3v18" />
+                <path d="M5 21h14" />
+                <path d="M5 7h14" />
+                <path d="M7 7l-3 6" />
+                <path d="M7 7l3 6" />
+                <path d="M17 7l-3 6" />
+                <path d="M17 7l3 6" />
+                <path d="M4 13a3 3 0 006 0z" />
+                <path d="M14 13a3 3 0 006 0z" />
+              </svg>
+              Muestreo de {selectedModule.name} — {formattedDate}
+            </button>
             <button
               onClick={() => setShowMuestreo(true)}
               className="w-full flex items-center justify-center gap-2.5 py-4 rounded-2xl
